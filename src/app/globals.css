@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+
+  --color-bg: #0c0c0e;
+  --color-bg-elevated: #141416;
+  --color-bg-hover: #1a1a1e;
+  --color-bg-active: #222226;
+  --color-border: #2a2a2e;
+  --color-border-subtle: #1e1e22;
+
+  --color-text-primary: #f0efe9;
+  --color-text-secondary: #8a8a8e;
+  --color-text-tertiary: #5c5c60;
+
+  --color-accent: #e4a853;
+  --color-accent-hover: #d9983f;
+  --color-accent-subtle: rgba(228, 168, 83, 0.12);
+
+  --color-success: #34d399;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
+
+  --color-keyword: #a78bfa;
+  --color-semantic: #34d399;
+  --color-hybrid: #e4a853;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    background: var(--color-bg);
+    color: var(--color-text-primary);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 2px;
+  }
+
+  :root {
+    --sat: env(safe-area-inset-top);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+    --sar: env(safe-area-inset-right);
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 12px;
+  }
+
+  .card-hover {
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .card-hover:hover {
+    background: var(--color-bg-hover);
+    border-color: var(--color-border);
+  }
+  .card-hover:active {
+    background: var(--color-bg-active);
+  }
+
+  .glass {
+    background: rgba(12, 12, 14, 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-bg-hover) 25%,
+      var(--color-bg-active) 50%,
+      var(--color-bg-hover) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: 6px;
+  }
+
+  @keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .fade-in {
+    animation: fade-up 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-raindrop",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/generate-digest?type=daily",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/generate-digest?type=weekly",
+      "schedule": "0 23 * * 5"
+    }
+  ]
+}
