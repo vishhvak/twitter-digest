@@ -1,5 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { TwitterApiClient, extractMediaFromTweet, TwitterApiTweet } from '@/lib/twitter/client'
+import {
+  TwitterApiClient,
+  extractMediaFromTweet,
+  getAuthorHandle,
+  getAuthorName,
+  getAuthorAvatar,
+  getAuthorId,
+  TwitterApiTweet,
+} from '@/lib/twitter/client'
 
 /**
  * Extract tweet ID from a Twitter/X URL.
@@ -40,10 +48,10 @@ export async function extractThread(
       return { isThread: false, tweetCount: 0 }
     }
 
-    const authorId = mainTweet.author.id
-    const authorHandle = mainTweet.author.username
-    const authorName = mainTweet.author.name
-    const authorAvatar = mainTweet.author.profileImageUrl
+    const authorId = getAuthorId(mainTweet)
+    const authorHandle = getAuthorHandle(mainTweet)
+    const authorName = getAuthorName(mainTweet)
+    const authorAvatar = getAuthorAvatar(mainTweet)
 
     // Also update the bookmark with richer tweet data from the API
     await supabase
@@ -56,26 +64,45 @@ export async function extractThread(
       })
       .eq('id', bookmarkId)
 
-    // 2. Fetch thread context
-    const allTweets = await twitter.getThreadContext(tweetId)
+    // 2. Determine conversation ID — if this tweet IS the root, its ID = conversationId
+    //    If it's a reply in a thread, conversationId points to the root
+    const conversationId = mainTweet.conversationId || tweetId
 
-    // 3. Filter to only tweets by the same author (this is the thread)
-    // Include the main tweet if not already in the results
+    // 3. Fetch all tweets by the same author in this conversation
+    const conversationTweets = await twitter.getThreadTweets(conversationId, authorHandle)
+
+    // Deduplicate and include the main tweet + root if not in results
     const threadTweets: TwitterApiTweet[] = []
     const seenIds = new Set<string>()
 
-    // The thread_context endpoint returns the conversation tree.
-    // We need tweets by the same author that form a chain (reply-to-self).
-    for (const tweet of allTweets) {
-      if (tweet.author?.id === authorId && !seenIds.has(tweet.id)) {
-        threadTweets.push(tweet)
-        seenIds.add(tweet.id)
+    // Add the main tweet
+    threadTweets.push(mainTweet)
+    seenIds.add(mainTweet.id)
+
+    // If conversation root is different from main tweet, fetch and add it
+    if (conversationId !== tweetId && !seenIds.has(conversationId)) {
+      const rootTweet = await twitter.getTweet(conversationId)
+      if (rootTweet && getAuthorId(rootTweet) === authorId) {
+        threadTweets.push(rootTweet)
+        seenIds.add(rootTweet.id)
       }
     }
 
-    // Ensure the main tweet is included
-    if (!seenIds.has(mainTweet.id)) {
-      threadTweets.push(mainTweet)
+    // Add conversation search results — only self-replies (replying to themselves)
+    // Filter out replies to other users (e.g., author answering someone else in the convo)
+    for (const tweet of conversationTweets) {
+      if (seenIds.has(tweet.id)) continue
+
+      // Include if: not a reply (root), or replying to themselves
+      const isRootTweet = !tweet.isReply || !tweet.inReplyToId
+      const isSelfReply = tweet.inReplyToUsername === authorHandle ||
+        tweet.inReplyToUserId === authorId
+      const isReplyToThreadTweet = tweet.inReplyToId && seenIds.has(tweet.inReplyToId)
+
+      if (isRootTweet || isSelfReply || isReplyToThreadTweet) {
+        threadTweets.push(tweet)
+        seenIds.add(tweet.id)
+      }
     }
 
     // Sort chronologically (oldest first)
@@ -100,9 +127,9 @@ export async function extractThread(
         bookmark_id: bookmarkId,
         position: index + 1,
         tweet_url: tweet.url || `https://x.com/${authorHandle}/status/${tweet.id}`,
-        author_handle: tweet.author?.username || authorHandle,
-        author_name: tweet.author?.name || authorName,
-        author_avatar_url: tweet.author?.profileImageUrl || authorAvatar,
+        author_handle: getAuthorHandle(tweet) || authorHandle,
+        author_name: getAuthorName(tweet) || authorName,
+        author_avatar_url: getAuthorAvatar(tweet) || authorAvatar,
         tweet_text: tweet.text,
         media: media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
         tweet_created_at: tweet.createdAt ? new Date(tweet.createdAt).toISOString() : null,
@@ -162,10 +189,10 @@ export async function enrichBookmarkFromTwitter(
     await supabase
       .from('bookmarks')
       .update({
-        tweet_author: tweet.author.username,
-        tweet_author_name: tweet.author.name,
+        tweet_author: getAuthorHandle(tweet),
+        tweet_author_name: getAuthorName(tweet),
         tweet_text: tweet.text,
-        cover_image_url: tweet.author.profileImageUrl,
+        cover_image_url: getAuthorAvatar(tweet),
         media: media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
       })
       .eq('id', bookmarkId)

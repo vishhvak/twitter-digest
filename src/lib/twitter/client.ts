@@ -4,6 +4,7 @@ interface TwitterApiTweet {
   type: string
   id: string
   url: string
+  twitterUrl?: string
   text: string
   source: string
   retweetCount: number
@@ -20,24 +21,39 @@ interface TwitterApiTweet {
   inReplyToUserId: string | null
   inReplyToUsername: string | null
   author: {
+    type?: string
     id: string
-    username: string
+    // API returns userName (camelCase), not username
+    userName?: string
+    username?: string
     name: string
-    profileImageUrl: string
-    verified: boolean
+    // API returns profilePicture, not profileImageUrl
+    profilePicture?: string
+    profileImageUrl?: string
+    isBlueVerified?: boolean
+    isVerified?: boolean
+    verified?: boolean
+    description?: string
+    followers?: number
+    following?: number
   }
   entities: {
     hashtags: any[]
     urls: any[]
     mentions: any[]
-    media?: {
-      url: string
-      type: string
-      media_url_https?: string
-      expanded_url?: string
-    }[]
+    media?: any[]
   }
   extendedEntities?: {
+    media?: {
+      media_url_https: string
+      type: string
+      video_info?: {
+        variants: { url: string; bitrate?: number; content_type: string }[]
+      }
+    }[]
+  }
+  // Snake case variant the API sometimes returns
+  extended_entities?: {
     media?: {
       media_url_https: string
       type: string
@@ -101,26 +117,29 @@ export class TwitterApiClient {
   }
 
   /**
-   * Fetch thread context for a tweet — returns all tweets in the conversation thread.
-   * This includes parent tweets and replies. We filter to same-author tweets to get the thread.
+   * Fetch all tweets in a thread by the same author using advanced_search.
+   * Uses `conversation_id:{id} from:{author}` to get all self-replies.
+   * This is more reliable than thread_context for detecting self-threads.
    */
-  async getThreadContext(tweetId: string): Promise<TwitterApiTweet[]> {
+  async getThreadTweets(conversationId: string, authorHandle: string): Promise<TwitterApiTweet[]> {
     const allTweets: TwitterApiTweet[] = []
     let cursor = ''
 
-    // Paginate through thread context
-    for (let page = 0; page < 10; page++) {
-      const params: Record<string, string> = { tweetId }
+    for (let page = 0; page < 5; page++) {
+      const params: Record<string, string> = {
+        query: `conversation_id:${conversationId} from:${authorHandle}`,
+        queryType: 'Latest',
+      }
       if (cursor) params.cursor = cursor
 
-      const data = await this.fetch<ThreadContextResponse>(
-        '/twitter/tweet/thread_context',
-        params
-      )
+      const data = await this.fetch<{
+        tweets: TwitterApiTweet[]
+        has_next_page: boolean
+        next_cursor: string
+      }>('/twitter/tweet/advanced_search', params)
 
-      if (data.status !== 'success') break
-      if (data.replies?.length) {
-        allTweets.push(...data.replies)
+      if (data.tweets?.length) {
+        allTweets.push(...data.tweets)
       }
 
       if (!data.has_next_page || !data.next_cursor) break
@@ -169,6 +188,26 @@ export function extractMediaFromTweet(tweet: TwitterApiTweet): { url: string; ty
   }
 
   return media
+}
+
+/**
+ * Normalize author fields — API inconsistently uses userName vs username,
+ * profilePicture vs profileImageUrl.
+ */
+export function getAuthorHandle(tweet: TwitterApiTweet): string {
+  return tweet.author?.userName || tweet.author?.username || ''
+}
+
+export function getAuthorName(tweet: TwitterApiTweet): string {
+  return tweet.author?.name || ''
+}
+
+export function getAuthorAvatar(tweet: TwitterApiTweet): string {
+  return tweet.author?.profilePicture || tweet.author?.profileImageUrl || ''
+}
+
+export function getAuthorId(tweet: TwitterApiTweet): string {
+  return tweet.author?.id || ''
 }
 
 export type { TwitterApiTweet }
