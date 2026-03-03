@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/generate-digest?type=weekly",
       "schedule": "0 23 * * 5"
+    },
+    {
+      "path": "/api/cron/detect-threads?limit=5",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

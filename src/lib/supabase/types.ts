@@ -15,11 +15,14 @@ export interface Bookmark {
   cover_image_url: string | null
   media: MediaItem[]
   is_thread: boolean
-  thread_tweets: ThreadTweet[]
+  thread_tweets: ThreadTweetLegacy[]
+  thread_tweet_count: number
   raindrop_created_at: string | null
   raindrop_updated_at: string | null
   created_at: string
   embedding?: number[]
+  // Joined from thread_tweets table
+  thread?: ThreadTweet[]
 }
 
 export interface MediaItem {
@@ -28,10 +31,24 @@ export interface MediaItem {
   alt_text?: string
 }
 
-export interface ThreadTweet {
+export interface ThreadTweetLegacy {
   author?: string
   text?: string
   media?: MediaItem[]
+}
+
+export interface ThreadTweet {
+  id: string
+  bookmark_id: string
+  position: number
+  tweet_url: string | null
+  author_handle: string | null
+  author_name: string | null
+  author_avatar_url: string | null
+  tweet_text: string
+  media: MediaItem[]
+  tweet_created_at: string | null
+  created_at: string
 }
 
 export interface ExtractedContent {

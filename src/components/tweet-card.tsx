@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { ExternalLink, Copy, Check } from "lucide-react"
+import { ExternalLink, Copy, Check, MessageSquare } from "lucide-react"
 import { Bookmark } from "@/lib/supabase/types"
 import { formatRelativeTime, truncateText, extractDomain } from "@/lib/utils"
 import { TweetMedia } from "./tweet-media"
 import { TagPill } from "./tag-pill"
+import { ThreadView } from "./thread-view"
 
 interface TweetCardProps {
   bookmark: Bookmark
@@ -79,6 +80,18 @@ export function TweetCard({ bookmark, index = 0, compact = false }: TweetCardPro
               ? formatRelativeTime(bookmark.raindrop_created_at)
               : ""}
           </span>
+          {bookmark.is_thread && bookmark.thread_tweet_count > 1 && (
+            <span
+              className="badge ml-1 shrink-0"
+              style={{
+                background: "var(--color-accent-subtle)",
+                color: "var(--color-accent)",
+              }}
+            >
+              <MessageSquare size={9} className="mr-1" />
+              {bookmark.thread_tweet_count}
+            </span>
+          )}
         </div>
       </div>
 
@@ -123,6 +136,11 @@ export function TweetCard({ bookmark, index = 0, compact = false }: TweetCardPro
             />
           </div>
         )}
+
+      {/* Thread view */}
+      {!compact && bookmark.is_thread && bookmark.thread && bookmark.thread.length > 1 && (
+        <ThreadView thread={bookmark.thread} authorHandle={bookmark.tweet_author} />
+      )}
 
       {/* Domain badge */}
       {domain && !domain.includes("twitter.com") && !domain.includes("x.com") && (

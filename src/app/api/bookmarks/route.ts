@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('bookmarks')
-    .select('*')
+    .select('*, thread_tweets_rel:thread_tweets(*)') // Join thread tweets
     .order('raindrop_created_at', { ascending: false })
     .limit(limit + 1)
 
@@ -28,7 +28,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const bookmarks = data || []
+  // Map the joined thread_tweets_rel into the thread field, sorted by position
+  const bookmarks = (data || []).map((bm: any) => {
+    const threadTweets = (bm.thread_tweets_rel || []).sort(
+      (a: any, b: any) => a.position - b.position
+    )
+    const { thread_tweets_rel, ...rest } = bm
+    return { ...rest, thread: threadTweets.length > 0 ? threadTweets : undefined }
+  })
+
   const hasMore = bookmarks.length > limit
   const items = hasMore ? bookmarks.slice(0, limit) : bookmarks
   const nextCursor = hasMore ? items[items.length - 1]?.raindrop_created_at : null
