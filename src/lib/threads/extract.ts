@@ -1,148 +1,175 @@
-import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { TwitterApiClient, extractMediaFromTweet, TwitterApiTweet } from '@/lib/twitter/client'
 
-const ThreadTweetSchema = z.object({
-  author_handle: z.string().describe('The @handle of the tweet author, without the @'),
-  author_name: z.string().describe('The display name of the tweet author'),
-  tweet_text: z.string().describe('The full text content of this tweet'),
-  media_urls: z.array(z.string()).describe('URLs of any images or videos in this tweet'),
-})
-
-const ThreadExtractionSchema = z.object({
-  is_thread: z.boolean().describe('True if the bookmarked tweet is part of a multi-tweet thread by the SAME author'),
-  tweets: z.array(ThreadTweetSchema).describe('All tweets in the thread in chronological order, including the bookmarked tweet itself. Only include tweets by the SAME author as the original tweet — ignore replies from other users.'),
-})
+/**
+ * Extract tweet ID from a Twitter/X URL.
+ */
+function extractTweetId(url: string): string | null {
+  const match = url.match(/(?:twitter|x)\.com\/\w+\/status\/(\d+)/)
+  return match ? match[1] : null
+}
 
 /**
  * Detect if a bookmarked tweet is a thread and extract all thread tweets.
- * Uses Stagehand/Browserbase to navigate to the tweet and analyze it.
+ * Uses twitterapi.io API — fast, no browser needed.
  */
-export async function extractThread(bookmarkId: string, tweetUrl: string, expectedAuthor: string | null): Promise<{
-  isThread: boolean
-  tweetCount: number
-}> {
-  // Dynamic import Stagehand
-  let Stagehand: any
-  try {
-    const mod = await import('@browserbasehq/stagehand')
-    Stagehand = mod.Stagehand
-  } catch {
-    console.warn('Stagehand not available, skipping thread detection')
+export async function extractThread(
+  bookmarkId: string,
+  tweetUrl: string,
+  expectedAuthor: string | null
+): Promise<{ isThread: boolean; tweetCount: number }> {
+  const apiKey = process.env.TWITTER_API_KEY
+  if (!apiKey) {
+    console.warn('TWITTER_API_KEY not set, skipping thread detection')
     return { isThread: false, tweetCount: 0 }
   }
 
-  let stagehand: any = null
+  const tweetId = extractTweetId(tweetUrl)
+  if (!tweetId) {
+    return { isThread: false, tweetCount: 0 }
+  }
+
+  const twitter = new TwitterApiClient(apiKey)
   const supabase = createAdminClient()
 
   try {
-    stagehand = new Stagehand({
-      env: 'BROWSERBASE',
-      apiKey: process.env.BROWSERBASE_API_KEY,
-      projectId: process.env.BROWSERBASE_PROJECT_ID,
-    })
-
-    await stagehand.init()
-    const page = stagehand.context.pages()[0]
-
-    // Navigate to the tweet
-    await page.goto(tweetUrl, { waitUntil: 'networkidle', timeout: 25000 })
-
-    // Wait a moment for thread to render
-    await page.waitForTimeout(2000)
-
-    // Extract thread data
-    const authorHint = expectedAuthor ? ` The bookmarked tweet is by @${expectedAuthor}.` : ''
-    const result = await stagehand.extract({
-      instruction: `Analyze this Twitter/X page. Determine if the displayed tweet is part of a thread (multiple consecutive tweets by the SAME author, connected with a thread line).${authorHint}
-
-If it IS a thread, extract ALL tweets in the thread by that same author in chronological order (oldest first). Include the bookmarked tweet itself. Do NOT include replies from other users — only tweets from the thread author.
-
-If it is NOT a thread (just a single tweet, or a tweet with replies from others), set is_thread to false and include just the single tweet in the tweets array.`,
-      schema: ThreadExtractionSchema,
-    })
-
-    if (!result || !result.tweets || result.tweets.length === 0) {
+    // 1. Fetch the bookmarked tweet to get author info
+    const mainTweet = await twitter.getTweet(tweetId)
+    if (!mainTweet) {
+      console.error(`Could not fetch tweet ${tweetId}`)
       return { isThread: false, tweetCount: 0 }
     }
 
-    const isThread = result.is_thread && result.tweets.length > 1
+    const authorId = mainTweet.author.id
+    const authorHandle = mainTweet.author.username
+    const authorName = mainTweet.author.name
+    const authorAvatar = mainTweet.author.profileImageUrl
 
-    if (isThread) {
-      // Delete any existing thread tweets for this bookmark (in case of re-extraction)
-      await supabase
-        .from('thread_tweets')
-        .delete()
-        .eq('bookmark_id', bookmarkId)
+    // Also update the bookmark with richer tweet data from the API
+    await supabase
+      .from('bookmarks')
+      .update({
+        tweet_author: authorHandle,
+        tweet_author_name: authorName,
+        tweet_text: mainTweet.text,
+        cover_image_url: authorAvatar,
+      })
+      .eq('id', bookmarkId)
 
-      // Insert thread tweets
-      const threadRows = result.tweets.map((tweet: any, index: number) => ({
-        bookmark_id: bookmarkId,
-        position: index + 1,
-        author_handle: tweet.author_handle?.replace('@', '') || expectedAuthor,
-        author_name: tweet.author_name || null,
-        tweet_text: tweet.tweet_text,
-        media: (tweet.media_urls || []).map((url: string) => ({ url, type: null, alt_text: null })),
-      }))
+    // 2. Fetch thread context
+    const allTweets = await twitter.getThreadContext(tweetId)
 
-      const { error } = await supabase
-        .from('thread_tweets')
-        .insert(threadRows)
+    // 3. Filter to only tweets by the same author (this is the thread)
+    // Include the main tweet if not already in the results
+    const threadTweets: TwitterApiTweet[] = []
+    const seenIds = new Set<string>()
 
-      if (error) {
-        console.error(`Failed to insert thread tweets for bookmark ${bookmarkId}:`, error)
-        return { isThread: false, tweetCount: 0 }
+    // The thread_context endpoint returns the conversation tree.
+    // We need tweets by the same author that form a chain (reply-to-self).
+    for (const tweet of allTweets) {
+      if (tweet.author?.id === authorId && !seenIds.has(tweet.id)) {
+        threadTweets.push(tweet)
+        seenIds.add(tweet.id)
       }
-
-      // Update the bookmark
-      await supabase
-        .from('bookmarks')
-        .update({
-          is_thread: true,
-          thread_tweet_count: result.tweets.length,
-          // Update tweet_text to be the full thread concatenated (better for search)
-          tweet_text: result.tweets.map((t: any) => t.tweet_text).join('\n\n'),
-        })
-        .eq('id', bookmarkId)
-
-      console.log(`Thread detected for bookmark ${bookmarkId}: ${result.tweets.length} tweets`)
     }
 
-    return { isThread, tweetCount: result.tweets.length }
+    // Ensure the main tweet is included
+    if (!seenIds.has(mainTweet.id)) {
+      threadTweets.push(mainTweet)
+    }
+
+    // Sort chronologically (oldest first)
+    threadTweets.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
+
+    const isThread = threadTweets.length > 1
+
+    if (!isThread) {
+      // Single tweet, not a thread — mark as checked
+      return { isThread: false, tweetCount: 1 }
+    }
+
+    // 4. Store thread tweets in DB
+    // Delete any existing thread tweets for this bookmark (re-extraction)
+    await supabase.from('thread_tweets').delete().eq('bookmark_id', bookmarkId)
+
+    const threadRows = threadTweets.map((tweet, index) => {
+      const media = extractMediaFromTweet(tweet)
+      return {
+        bookmark_id: bookmarkId,
+        position: index + 1,
+        tweet_url: tweet.url || `https://x.com/${authorHandle}/status/${tweet.id}`,
+        author_handle: tweet.author?.username || authorHandle,
+        author_name: tweet.author?.name || authorName,
+        author_avatar_url: tweet.author?.profileImageUrl || authorAvatar,
+        tweet_text: tweet.text,
+        media: media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+        tweet_created_at: tweet.createdAt ? new Date(tweet.createdAt).toISOString() : null,
+      }
+    })
+
+    const { error } = await supabase.from('thread_tweets').insert(threadRows)
+
+    if (error) {
+      console.error(`Failed to insert thread tweets for bookmark ${bookmarkId}:`, error)
+      return { isThread: false, tweetCount: 0 }
+    }
+
+    // 5. Update the parent bookmark
+    await supabase
+      .from('bookmarks')
+      .update({
+        is_thread: true,
+        thread_tweet_count: threadTweets.length,
+        // Concatenate all thread text for better search
+        tweet_text: threadTweets.map((t) => t.text).join('\n\n'),
+      })
+      .eq('id', bookmarkId)
+
+    console.log(`Thread detected for bookmark ${bookmarkId}: ${threadTweets.length} tweets by @${authorHandle}`)
+
+    return { isThread: true, tweetCount: threadTweets.length }
   } catch (e) {
     console.error(`Thread extraction failed for ${tweetUrl}:`, e)
     return { isThread: false, tweetCount: 0 }
-  } finally {
-    await stagehand?.close().catch(() => {})
   }
 }
 
 /**
- * Process thread detection for newly synced bookmarks that are Twitter/X URLs.
- * Runs as a background job after sync completes.
+ * Also enrich a single-tweet bookmark with data from the Twitter API
+ * (author name, avatar, full text, media).
  */
-export async function detectThreadsForNewBookmarks(bookmarkIds: string[]) {
+export async function enrichBookmarkFromTwitter(
+  bookmarkId: string,
+  tweetUrl: string
+): Promise<void> {
+  const apiKey = process.env.TWITTER_API_KEY
+  if (!apiKey) return
+
+  const tweetId = extractTweetId(tweetUrl)
+  if (!tweetId) return
+
+  const twitter = new TwitterApiClient(apiKey)
   const supabase = createAdminClient()
 
-  // Fetch bookmarks that are Twitter/X links and haven't been thread-checked yet
-  const { data: bookmarks } = await supabase
-    .from('bookmarks')
-    .select('id, url, tweet_author, thread_tweet_count')
-    .in('id', bookmarkIds)
-    .eq('thread_tweet_count', 0)
+  try {
+    const tweet = await twitter.getTweet(tweetId)
+    if (!tweet) return
 
-  if (!bookmarks || bookmarks.length === 0) return
+    const media = extractMediaFromTweet(tweet)
 
-  // Filter to only Twitter/X URLs
-  const twitterBookmarks = bookmarks.filter(bm =>
-    bm.url.match(/(?:twitter|x)\.com\/\w+\/status/)
-  )
-
-  // Process sequentially to avoid overwhelming Browserbase
-  for (const bm of twitterBookmarks) {
-    try {
-      await extractThread(bm.id, bm.url, bm.tweet_author)
-    } catch (e) {
-      console.error(`Thread detection failed for ${bm.url}:`, e)
-    }
+    await supabase
+      .from('bookmarks')
+      .update({
+        tweet_author: tweet.author.username,
+        tweet_author_name: tweet.author.name,
+        tweet_text: tweet.text,
+        cover_image_url: tweet.author.profileImageUrl,
+        media: media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+      })
+      .eq('id', bookmarkId)
+  } catch (e) {
+    console.error(`Enrichment failed for ${tweetUrl}:`, e)
   }
 }

@@ -4,7 +4,7 @@ import { extractThread } from '@/lib/threads/extract'
 
 /**
  * Background job: detect threads for Twitter/X bookmarks that haven't been checked yet.
- * Processes up to 5 bookmarks per run to stay within Browserbase limits.
+ * Uses twitterapi.io — processes up to 10 bookmarks per run (fast API calls, no browser).
  */
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createAdminClient()
-  const limit = parseInt(request.nextUrl.searchParams.get('limit') || '5')
+  const limit = parseInt(request.nextUrl.searchParams.get('limit') || '10')
 
   // Find bookmarks that are Twitter/X URLs and haven't been thread-checked
   const { data: bookmarks, error } = await supabase
@@ -62,4 +62,4 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ processed, threads, total: tweetBookmarks.length })
 }
 
-export const maxDuration = 300
+export const maxDuration = 60

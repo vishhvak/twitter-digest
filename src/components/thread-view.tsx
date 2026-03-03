@@ -51,15 +51,23 @@ export function ThreadView({ thread, authorHandle }: ThreadViewProps) {
               {/* Vertical thread line + avatar column */}
               <div className="flex flex-col items-center">
                 {/* Avatar */}
-                <div
-                  className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
-                  style={{
-                    background: `hsl(${hue}, 40%, 25%)`,
-                    color: `hsl(${hue}, 60%, 75%)`,
-                  }}
-                >
-                  {initial}
-                </div>
+                {tweet.author_avatar_url ? (
+                  <img
+                    src={tweet.author_avatar_url}
+                    alt={tweet.author_handle || ""}
+                    className="relative z-10 h-6 w-6 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
+                    style={{
+                      background: `hsl(${hue}, 40%, 25%)`,
+                      color: `hsl(${hue}, 60%, 75%)`,
+                    }}
+                  >
+                    {initial}
+                  </div>
+                )}
                 {/* Connector line */}
                 {showConnector && (
                   <div

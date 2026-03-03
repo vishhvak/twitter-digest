@@ -42,15 +42,23 @@ export function TweetCard({ bookmark, index = 0, compact = false }: TweetCardPro
     >
       {/* Author row */}
       <div className="flex items-center gap-2.5">
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-          style={{
-            background: `hsl(${hue}, 40%, 25%)`,
-            color: `hsl(${hue}, 60%, 75%)`,
-          }}
-        >
-          {initial}
-        </div>
+        {bookmark.cover_image_url && bookmark.cover_image_url.includes('profile_images') ? (
+          <img
+            src={bookmark.cover_image_url}
+            alt={author}
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            style={{
+              background: `hsl(${hue}, 40%, 25%)`,
+              color: `hsl(${hue}, 60%, 75%)`,
+            }}
+          >
+            {initial}
+          </div>
+        )}
         <div className="flex min-w-0 items-center gap-1.5">
           {bookmark.tweet_author_name && (
             <span
