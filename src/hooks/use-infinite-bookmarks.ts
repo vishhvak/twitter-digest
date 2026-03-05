@@ -10,7 +10,9 @@ export function useInfiniteBookmarks(tag?: string) {
   const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const cursorRef = useRef<string | null>(null)
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const loadingMoreRef = useRef(false)
+  const hasMoreRef = useRef(true)
+  const observerRef = useRef<IntersectionObserver | null>(null)
 
   const fetchPage = useCallback(
     async (cursor?: string | null) => {
@@ -28,16 +30,62 @@ export function useInfiniteBookmarks(tag?: string) {
     [tag]
   )
 
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMoreRef.current) return
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    try {
+      const { bookmarks: items, nextCursor } = await fetchPage(cursorRef.current)
+      setBookmarks((prev) => [...prev, ...items])
+      cursorRef.current = nextCursor
+      hasMoreRef.current = !!nextCursor
+      setHasMore(!!nextCursor)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+    }
+  }, [fetchPage])
+
+  // Callback ref — fires whenever the sentinel element mounts/unmounts
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      // Disconnect previous observer
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+        observerRef.current = null
+      }
+
+      if (!node) return
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            loadMore()
+          }
+        },
+        { rootMargin: "400px" }
+      )
+
+      observer.observe(node)
+      observerRef.current = observer
+    },
+    [loadMore]
+  )
+
   // Initial load
   useEffect(() => {
     setLoading(true)
     setBookmarks([])
     cursorRef.current = null
+    hasMoreRef.current = true
 
     fetchPage()
       .then(({ bookmarks: items, nextCursor }) => {
         setBookmarks(items)
         cursorRef.current = nextCursor
+        hasMoreRef.current = !!nextCursor
         setHasMore(!!nextCursor)
         setError(null)
       })
@@ -45,36 +93,37 @@ export function useInfiniteBookmarks(tag?: string) {
       .finally(() => setLoading(false))
   }, [fetchPage])
 
-  // Load more via IntersectionObserver
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return
-    setLoadingMore(true)
+  // Cleanup observer on unmount
+  useEffect(() => {
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [])
+
+  const removeBookmark = useCallback((id: string) => {
+    setBookmarks((prev) => prev.filter((b) => b.id !== id))
+  }, [])
+
+  // Pull-to-refresh: quick incremental sync then reload first page
+  const [refreshing, setRefreshing] = useState(false)
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
     try {
-      const { bookmarks: items, nextCursor } = await fetchPage(cursorRef.current)
-      setBookmarks((prev) => [...prev, ...items])
+      await fetch("/api/sync-quick", { method: "POST" })
+      const { bookmarks: items, nextCursor } = await fetchPage()
+      setBookmarks(items)
       cursorRef.current = nextCursor
+      hasMoreRef.current = !!nextCursor
       setHasMore(!!nextCursor)
+      setError(null)
     } catch (e: any) {
       setError(e.message)
     } finally {
-      setLoadingMore(false)
+      setRefreshing(false)
     }
-  }, [fetchPage, loadingMore, hasMore])
+  }, [fetchPage])
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) loadMore()
-      },
-      { rootMargin: "200px" }
-    )
-
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [loadMore])
-
-  return { bookmarks, loading, loadingMore, hasMore, error, sentinelRef }
+  return { bookmarks, loading, loadingMore, hasMore, error, sentinelRef, removeBookmark, refreshing, refresh }
 }
