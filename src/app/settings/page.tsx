@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   RefreshCw,
   BookOpen,
@@ -10,9 +10,17 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
+  ChevronDown,
+  ChevronUp,
+  Download,
 } from "lucide-react"
 import { SyncState } from "@/lib/supabase/types"
 import { formatRelativeTime } from "@/lib/utils"
+
+interface SyncLogEntry {
+  time: string
+  message: string
+}
 
 export default function SettingsPage() {
   const [syncState, setSyncState] = useState<SyncState | null>(null)
@@ -24,6 +32,10 @@ export default function SettingsPage() {
     message: string
     type: "success" | "error"
   } | null>(null)
+  const [syncLogs, setSyncLogs] = useState<SyncLogEntry[]>([])
+  const [logsExpanded, setLogsExpanded] = useState(false)
+  const logEndRef = useRef<HTMLDivElement>(null)
+  const [twitterCredits, setTwitterCredits] = useState<number | null>(null)
 
   const fetchStatus = async () => {
     try {
@@ -38,33 +50,99 @@ export default function SettingsPage() {
     }
   }
 
+  const fetchTwitterCredits = async () => {
+    try {
+      const res = await fetch("/api/twitter-credits")
+      const data = await res.json()
+      setTwitterCredits(data.credits)
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     fetchStatus()
+    fetchTwitterCredits()
   }, [])
+
+  useEffect(() => {
+    if (logsExpanded && logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [syncLogs, logsExpanded])
 
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
   }
 
-  const triggerSync = async () => {
+  const [syncProgress, setSyncProgress] = useState<{
+    status: string
+    totalItems: number
+    processedItems: number
+    message: string
+    logs: SyncLogEntry[]
+  } | null>(null)
+
+  const triggerSync = async (mode: "incremental" | "full" | "backfill-older" = "incremental") => {
     setSyncing(true)
+    setSyncProgress(null)
+    setSyncLogs([])
+    setLogsExpanded(false)
+
+    // Start polling progress
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/sync-progress")
+        const progress = await res.json()
+        if (progress.status !== "idle") {
+          setSyncProgress(progress)
+          if (progress.logs?.length) {
+            setSyncLogs(progress.logs)
+          }
+        }
+        if (progress.status === "done" || progress.status === "error") {
+          clearInterval(pollInterval)
+        }
+      } catch {
+        // ignore
+      }
+    }, 1000)
+
+    const modeParam = mode !== "incremental" ? `?mode=${mode}` : ""
+
     try {
-      const res = await fetch("/api/cron/sync-raindrop", {
+      const res = await fetch(`/api/cron/sync-raindrop${modeParam}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || ""}` },
       })
+      clearInterval(pollInterval)
+
+      // Fetch final progress to get all logs
+      try {
+        const finalRes = await fetch("/api/sync-progress")
+        const finalProgress = await finalRes.json()
+        if (finalProgress.logs?.length) {
+          setSyncLogs(finalProgress.logs)
+        }
+      } catch {
+        // ignore
+      }
+
       if (res.ok) {
         const data = await res.json()
         showToast(`Synced ${data.synced} bookmarks`, "success")
         await fetchStatus()
+        fetchTwitterCredits()
       } else {
         showToast("Sync failed — check Settings for auth config", "error")
       }
     } catch {
+      clearInterval(pollInterval)
       showToast("Sync failed", "error")
     } finally {
       setSyncing(false)
+      setSyncProgress(null)
     }
   }
 
@@ -84,6 +162,14 @@ export default function SettingsPage() {
       showToast("Digest generation failed", "error")
     } finally {
       setGeneratingDigest(null)
+    }
+  }
+
+  const formatLogTime = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleTimeString()
+    } catch {
+      return iso
     }
   }
 
@@ -122,7 +208,7 @@ export default function SettingsPage() {
         </div>
 
         <div
-          className="mt-3 grid grid-cols-2 gap-3 rounded-lg p-3"
+          className="mt-3 grid grid-cols-3 gap-3 rounded-lg p-3"
           style={{ background: "var(--color-bg)" }}
         >
           <div>
@@ -130,7 +216,7 @@ export default function SettingsPage() {
               className="text-[11px] font-medium uppercase tracking-wider"
               style={{ color: "var(--color-text-tertiary)" }}
             >
-              Total bookmarks
+              Bookmarks
             </div>
             <div
               className="mt-0.5 text-[18px] font-bold tabular-nums"
@@ -160,25 +246,122 @@ export default function SettingsPage() {
               </span>
             </div>
           </div>
+          <div>
+            <div
+              className="text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "var(--color-text-tertiary)" }}
+            >
+              API Credits
+            </div>
+            <div
+              className="mt-0.5 text-[18px] font-bold tabular-nums"
+              style={{
+                color: twitterCredits !== null && twitterCredits < 100
+                  ? "var(--color-error)"
+                  : "var(--color-text-primary)",
+              }}
+            >
+              {twitterCredits !== null ? twitterCredits.toLocaleString() : "—"}
+            </div>
+          </div>
         </div>
 
-        <button
-          onClick={triggerSync}
-          disabled={syncing}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-[13px] font-semibold transition-colors"
-          style={{
-            background: "var(--color-accent)",
-            color: "var(--color-bg)",
-            opacity: syncing ? 0.7 : 1,
-          }}
-        >
-          {syncing ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <RefreshCw size={14} />
-          )}
-          {syncing ? "Syncing..." : "Sync Now"}
-        </button>
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={() => triggerSync("incremental")}
+            disabled={syncing}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-[13px] font-semibold transition-colors"
+            style={{
+              background: "var(--color-accent)",
+              color: "var(--color-bg)",
+              opacity: syncing ? 0.7 : 1,
+            }}
+          >
+            {syncing ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <RefreshCw size={14} />
+            )}
+            {syncing ? "Syncing..." : "Sync Now"}
+          </button>
+          <button
+            onClick={() => triggerSync("full")}
+            disabled={syncing}
+            className="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-semibold transition-colors"
+            style={{
+              background: "var(--color-bg)",
+              color: "var(--color-accent)",
+              border: "1px solid var(--color-border)",
+              opacity: syncing ? 0.7 : 1,
+            }}
+          >
+            <Download size={14} />
+            Full Sync
+          </button>
+        </div>
+
+        {syncing && syncProgress && syncProgress.totalItems > 0 && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-[12px]" style={{ color: "var(--color-text-secondary)" }}>
+              <span>{syncProgress.message}</span>
+              <span>{Math.round((syncProgress.processedItems / syncProgress.totalItems) * 100)}%</span>
+            </div>
+            <div
+              className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full"
+              style={{ background: "var(--color-bg)" }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  background: syncProgress.status === "threads" ? "var(--color-info)" : "var(--color-accent)",
+                  width: `${(syncProgress.processedItems / syncProgress.totalItems) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {syncing && (!syncProgress || syncProgress.status === "fetching") && (
+          <p className="mt-2 text-center text-[12px]" style={{ color: "var(--color-text-tertiary)" }}>
+            {syncProgress?.message || "Fetching bookmarks from Raindrop..."}
+          </p>
+        )}
+
+        {/* Sync Logs */}
+        {syncLogs.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => setLogsExpanded(!logsExpanded)}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-medium transition-colors"
+              style={{
+                background: "var(--color-bg)",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              <span>Sync Log ({syncLogs.length} entries)</span>
+              {logsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {logsExpanded && (
+              <div
+                className="mt-1 max-h-48 overflow-y-auto rounded-lg p-3 font-mono text-[11px] leading-relaxed"
+                style={{
+                  background: "var(--color-bg)",
+                  color: "var(--color-text-secondary)",
+                }}
+              >
+                {syncLogs.map((entry, i) => (
+                  <div key={i} className="whitespace-pre-wrap">
+                    <span style={{ color: "var(--color-text-tertiary)" }}>
+                      {formatLogTime(entry.time)}
+                    </span>{" "}
+                    {entry.message}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Digest Controls */}

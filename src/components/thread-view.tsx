@@ -4,6 +4,7 @@ import { useState } from "react"
 import { ChevronDown, ChevronUp, MessageSquare } from "lucide-react"
 import { ThreadTweet, MediaItem } from "@/lib/supabase/types"
 import { TweetMedia } from "./tweet-media"
+import { LinkifyText } from "./linkify-text"
 
 interface ThreadViewProps {
   thread: ThreadTweet[]
@@ -15,9 +16,9 @@ export function ThreadView({ thread, authorHandle }: ThreadViewProps) {
 
   if (!thread || thread.length <= 1) return null
 
-  // Show first tweet + collapse indicator, or all tweets when expanded
-  const visibleTweets = expanded ? thread : thread.slice(0, 1)
-  const hiddenCount = thread.length - 1
+  // Skip the first tweet — it's already shown in the card body
+  const restOfThread = thread.slice(1)
+  const visibleTweets = expanded ? restOfThread : []
   const author = authorHandle || thread[0]?.author_handle || "unknown"
 
   // Avatar color from handle
@@ -111,7 +112,7 @@ export function ThreadView({ thread, authorHandle }: ThreadViewProps) {
                   className="mt-0.5 whitespace-pre-wrap text-[14px] leading-[1.45]"
                   style={{ color: "var(--color-text-primary)" }}
                 >
-                  {tweet.tweet_text}
+                  <LinkifyText text={tweet.tweet_text} />
                 </p>
 
                 {/* Media */}
@@ -125,33 +126,8 @@ export function ThreadView({ thread, authorHandle }: ThreadViewProps) {
           )
         })}
 
-        {/* Collapsed indicator — shows remaining count */}
-        {!expanded && hiddenCount > 0 && (
-          <button
-            onClick={() => setExpanded(true)}
-            className="flex w-full items-center gap-3 rounded-lg py-2 transition-colors"
-            style={{ color: "var(--color-accent)" }}
-          >
-            {/* Line stub */}
-            <div className="flex w-6 justify-center">
-              <div
-                className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold"
-                style={{
-                  background: "var(--color-accent-subtle)",
-                  color: "var(--color-accent)",
-                }}
-              >
-                +{hiddenCount}
-              </div>
-            </div>
-            <span className="text-[13px] font-medium">
-              Show {hiddenCount} more tweet{hiddenCount > 1 ? "s" : ""} in thread
-            </span>
-          </button>
-        )}
-
         {/* Collapse button when expanded */}
-        {expanded && thread.length > 2 && (
+        {expanded && (
           <button
             onClick={() => setExpanded(false)}
             className="mt-1 flex items-center gap-1.5 text-[12px] font-medium"
