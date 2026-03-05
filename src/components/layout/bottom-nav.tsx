@@ -2,11 +2,10 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Search, BookOpen, Settings } from "lucide-react"
+import { Home, BookOpen, Settings } from "lucide-react"
 
 const navItems = [
   { href: "/", label: "Feed", icon: Home },
-  { href: "/search", label: "Search", icon: Search },
   { href: "/digest", label: "Digest", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
