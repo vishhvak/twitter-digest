@@ -23,6 +23,12 @@ export async function POST(
     return NextResponse.json({ error: 'Bookmark not found' }, { status: 404 })
   }
 
+  // Return cached summary if available
+  if (bookmark.ai_summary) {
+    log.info(`Returning cached summary for ${id}`)
+    return NextResponse.json({ summary: bookmark.ai_summary })
+  }
+
   // Build content for summarization
   let content = ''
 
@@ -61,6 +67,12 @@ export async function POST(
 
     const summary = res.choices[0]?.message?.content || 'Could not generate summary.'
     log.info(`Summarized bookmark ${id} in ${Date.now() - start}ms`)
+
+    // Save to DB
+    await supabase
+      .from('bookmarks')
+      .update({ ai_summary: summary })
+      .eq('id', id)
 
     return NextResponse.json({ summary })
   } catch (e) {

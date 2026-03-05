@@ -35,6 +35,7 @@ export interface Bookmark {
   thread_tweet_count: number
   quoted_tweet: QuotedTweet | null
   article_content: ArticleContent | null
+  ai_summary: string | null
   raindrop_created_at: string | null
   raindrop_updated_at: string | null
   created_at: string

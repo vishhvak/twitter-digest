@@ -28,7 +28,7 @@ export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDe
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [flipped, setFlipped] = useState(false)
-  const [summary, setSummary] = useState<string | null>(null)
+  const [summary, setSummary] = useState<string | null>(bookmark.ai_summary || null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const frontRef = useRef<HTMLDivElement>(null)
   const [cardHeight, setCardHeight] = useState<number | undefined>(undefined)
