@@ -131,4 +131,73 @@
       transform: translateY(0);
     }
   }
+
+  /* Card flip animation */
+  .flip-container {
+    perspective: 1200px;
+  }
+
+  .flip-inner {
+    position: relative;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-style: preserve-3d;
+  }
+
+  .flip-inner.flipped {
+    transform: rotateY(180deg);
+  }
+
+  .flip-front,
+  .flip-back {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .flip-back {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
+  }
+
+  .article-body h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+    color: var(--color-text-primary);
+  }
+  .article-body h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 1em;
+    margin-bottom: 0.4em;
+    color: var(--color-text-primary);
+  }
+  .article-body p {
+    margin-bottom: 0.75em;
+  }
+  .article-body strong {
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+  .article-body ul, .article-body ol {
+    padding-left: 1.25em;
+    margin-bottom: 0.75em;
+  }
+  .article-body li {
+    margin-bottom: 0.35em;
+  }
+  .article-body ul li {
+    list-style-type: disc;
+  }
+  .article-body ol li {
+    list-style-type: decimal;
+  }
+  .article-body code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--color-bg-hover);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
 }
