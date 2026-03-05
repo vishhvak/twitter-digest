@@ -1,6 +1,10 @@
 import { RaindropItem, RaindropsResponse } from './types'
+import { createLogger } from '@/lib/logger'
 
 const RAINDROP_API_BASE = 'https://api.raindrop.io/rest/v1'
+const log = createLogger('raindrop')
+
+export type OnPageFetched = (info: { page: number; itemsOnPage: number; totalSoFar: number }) => void
 
 export class RaindropClient {
   private token: string
@@ -44,7 +48,7 @@ export class RaindropClient {
     return this.fetch<RaindropsResponse>(`/raindrops/${collectionId}`, params)
   }
 
-  async getAllRaindropsSince(sinceDate: string): Promise<RaindropItem[]> {
+  async getAllRaindropsSince(sinceDate: string, onPageFetched?: OnPageFetched): Promise<RaindropItem[]> {
     const all: RaindropItem[] = []
     let page = 0
 
@@ -57,6 +61,8 @@ export class RaindropClient {
 
       if (!response.items.length) break
       all.push(...response.items)
+      log.info(`Page ${page}: fetched ${response.items.length} items (total: ${all.length})`)
+      onPageFetched?.({ page, itemsOnPage: response.items.length, totalSoFar: all.length })
       page++
       if (page >= 200) break
     }
@@ -64,7 +70,7 @@ export class RaindropClient {
     return all
   }
 
-  async getAllRaindrops(): Promise<RaindropItem[]> {
+  async getAllRaindrops(onPageFetched?: OnPageFetched): Promise<RaindropItem[]> {
     const all: RaindropItem[] = []
     let page = 0
 
@@ -72,6 +78,30 @@ export class RaindropClient {
       const response = await this.getRaindrops({ page, sort: '-created' })
       if (!response.items.length) break
       all.push(...response.items)
+      log.info(`Page ${page}: fetched ${response.items.length} items (total: ${all.length})`)
+      onPageFetched?.({ page, itemsOnPage: response.items.length, totalSoFar: all.length })
+      page++
+      if (page >= 200) break
+    }
+
+    return all
+  }
+
+  async getAllRaindropsBefore(beforeDate: string, onPageFetched?: OnPageFetched): Promise<RaindropItem[]> {
+    const all: RaindropItem[] = []
+    let page = 0
+
+    while (true) {
+      const response = await this.getRaindrops({
+        page,
+        search: `created:<${beforeDate}`,
+        sort: '-created',
+      })
+
+      if (!response.items.length) break
+      all.push(...response.items)
+      log.info(`Page ${page}: fetched ${response.items.length} items (total: ${all.length})`)
+      onPageFetched?.({ page, itemsOnPage: response.items.length, totalSoFar: all.length })
       page++
       if (page >= 200) break
     }

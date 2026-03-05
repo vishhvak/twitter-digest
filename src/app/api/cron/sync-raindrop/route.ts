@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { syncRaindrops } from '@/lib/raindrop/sync'
+import { syncRaindrops, SyncMode } from '@/lib/raindrop/sync'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('sync-api')
+
+const VALID_MODES: SyncMode[] = ['incremental', 'full', 'backfill-older']
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -7,14 +12,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const modeParam = request.nextUrl.searchParams.get('mode') || 'incremental'
+  const mode = VALID_MODES.includes(modeParam as SyncMode) ? (modeParam as SyncMode) : 'incremental'
+
+  log.info(`Sync triggered with mode: ${mode}`)
+
   try {
-    const result = await syncRaindrops()
+    const result = await syncRaindrops({ mode })
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Sync failed:', error)
+    log.error('Sync failed', error)
     return NextResponse.json(
       { error: 'Sync failed', message: String(error) },
       { status: 500 }
     )
   }
 }
+
+export const maxDuration = 300
