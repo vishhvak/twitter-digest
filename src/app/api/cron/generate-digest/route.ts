@@ -4,11 +4,10 @@ import { createLogger } from '@/lib/logger'
 
 const log = createLogger('generate-digest-api')
 
-export async function POST(request: NextRequest) {
-  // Auth is optional — settings UI calls without auth, Vercel cron sends CRON_SECRET
+async function handleGenerate(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader && process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    log.warn(`Auth failed: invalid secret`)
+    log.warn('Auth failed: invalid secret')
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -25,6 +24,15 @@ export async function POST(request: NextRequest) {
     log.error('Digest generation failed', error)
     return NextResponse.json({ error: 'Digest generation failed', details: String(error) }, { status: 500 })
   }
+}
+
+// Vercel crons send GET requests
+export async function GET(request: NextRequest) {
+  return handleGenerate(request)
+}
+
+export async function POST(request: NextRequest) {
+  return handleGenerate(request)
 }
 
 export const maxDuration = 300

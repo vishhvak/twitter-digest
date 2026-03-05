@@ -6,7 +6,7 @@ const log = createLogger('sync-api')
 
 const VALID_MODES: SyncMode[] = ['incremental', 'full', 'backfill-older']
 
-export async function POST(request: NextRequest) {
+async function handleSync(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader && process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,6 +27,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// Vercel crons send GET requests
+export async function GET(request: NextRequest) {
+  return handleSync(request)
+}
+
+export async function POST(request: NextRequest) {
+  return handleSync(request)
 }
 
 export const maxDuration = 300
