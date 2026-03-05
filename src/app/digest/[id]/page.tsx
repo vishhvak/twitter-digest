@@ -2,9 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react"
+import { ArrowLeft, ExternalLink, RefreshCw, ChevronDown } from "lucide-react"
 import { Digest } from "@/lib/supabase/types"
 import { ConfirmModal } from "@/components/confirm-modal"
+
+function stripLeadingAt(handle: string) {
+  return handle.replace(/^@+/, "")
+}
 
 export default function DigestDetailPage() {
   const params = useParams()
@@ -13,6 +17,11 @@ export default function DigestDetailPage() {
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
   const [showRegenModal, setShowRegenModal] = useState(false)
+  const [expandedSections, setExpandedSections] = useState<Record<number, boolean>>({})
+
+  const toggleSection = (si: number) => {
+    setExpandedSections((prev) => ({ ...prev, [si]: !prev[si] }))
+  }
 
   useEffect(() => {
     if (!params.id) return
@@ -136,7 +145,7 @@ export default function DigestDetailPage() {
 
       {/* Sections */}
       {content?.sections?.map((section, si) => (
-        <section key={si} className="mb-8">
+        <section key={si} className="mb-6">
           <h2
             className="mb-2 text-[16px] font-semibold"
             style={{ color: "var(--color-text-primary)" }}
@@ -144,70 +153,73 @@ export default function DigestDetailPage() {
             {section.theme}
           </h2>
           <p
-            className="mb-4 text-[14px] leading-relaxed"
+            className="mb-3 text-[14px] leading-relaxed"
             style={{ color: "var(--color-text-secondary)" }}
           >
             {section.summary}
           </p>
 
-          <div className="space-y-4">
-            {section.items?.map((item, ii) => (
-              <div key={ii} className="card px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-[13px] font-semibold"
-                    style={{ color: "var(--color-accent)" }}
-                  >
-                    @{item.tweet_author}
-                  </span>
-                </div>
-                {item.tweet_text && (
-                  <p
-                    className="mt-1.5 text-[14px] leading-relaxed"
-                    style={{ color: "var(--color-text-primary)" }}
-                  >
-                    {item.tweet_text.slice(0, 280)}
-                  </p>
-                )}
-                <div
-                  className="mt-2 rounded-lg px-3 py-2 text-[13px] leading-relaxed"
+          {/* Collapsible Sources */}
+          {section.items && section.items.length > 0 && (
+            <div>
+              <button
+                onClick={() => toggleSection(si)}
+                className="flex items-center gap-1.5 text-[13px] font-medium"
+                style={{ color: "var(--color-text-tertiary)" }}
+              >
+                <ChevronDown
+                  size={14}
                   style={{
-                    background: "var(--color-bg-hover)",
-                    color: "var(--color-text-secondary)",
+                    transform: expandedSections[si] ? "rotate(180deg)" : "rotate(0)",
+                    transition: "transform 200ms ease",
                   }}
-                >
-                  {item.insight}
-                </div>
-                {item.sources && item.sources.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {item.sources.map((source, si2) => (
+                />
+                {section.items.length} {section.items.length === 1 ? "source" : "sources"}
+              </button>
+
+              {expandedSections[si] && (
+                <div className="mt-2 space-y-2">
+                  {section.items.map((item, ii) => {
+                    const tweetUrl = item.sources?.find((s) => s.type === "tweet")?.url
+                    const handle = stripLeadingAt(item.tweet_author)
+                    return (
                       <a
-                        key={si2}
-                        href={source.url}
+                        key={ii}
+                        href={tweetUrl || `https://x.com/${handle}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-[12px] transition-colors hover:underline"
-                        style={{ color: "var(--color-info)" }}
+                        className="card card-hover block px-3.5 py-2.5"
                       >
-                        <ExternalLink size={11} />
-                        {source.title}
-                        <span
-                          className="badge"
-                          style={{
-                            background: "var(--color-bg-active)",
-                            color: "var(--color-text-tertiary)",
-                            fontSize: "10px",
-                          }}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-[13px] font-semibold"
+                            style={{ color: "var(--color-accent)" }}
+                          >
+                            @{handle}
+                          </span>
+                          <ExternalLink size={11} style={{ color: "var(--color-text-tertiary)" }} />
+                        </div>
+                        <p
+                          className="mt-1 text-[13px] leading-relaxed"
+                          style={{ color: "var(--color-text-secondary)" }}
                         >
-                          {source.type}
-                        </span>
+                          {item.insight}
+                        </p>
+                        {item.tweet_text && (
+                          <p
+                            className="mt-1 text-[12px] leading-relaxed"
+                            style={{ color: "var(--color-text-tertiary)" }}
+                          >
+                            {item.tweet_text.slice(0, 120)}{item.tweet_text.length > 120 ? "..." : ""}
+                          </p>
+                        )}
                       </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {si < (content?.sections?.length || 0) - 1 && (
             <div

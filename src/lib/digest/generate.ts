@@ -140,7 +140,7 @@ Output JSON schema:
         {
           "bookmark_id": "string — UUID from bookmark",
           "tweet_text": "string — short excerpt (max 100 chars)",
-          "tweet_author": "string — @handle",
+          "tweet_author": "string — handle without @ prefix",
           "insight": "string — what's notable about this",
           "sources": [
             { "title": "string", "url": "string", "type": "tweet|article|paper|website" }
@@ -234,7 +234,8 @@ function renderDigestMarkdown(
     md += `${section.summary}\n\n`
 
     for (const item of section.items) {
-      md += `**@${item.tweet_author}**: ${item.tweet_text?.slice(0, 200)}\n\n`
+      const handle = item.tweet_author.replace(/^@+/, '')
+      md += `**@${handle}**: ${item.tweet_text?.slice(0, 200)}\n\n`
       md += `> ${item.insight}\n\n`
 
       if (item.sources?.length) {
