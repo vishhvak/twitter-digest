@@ -29,9 +29,10 @@ export async function GET(request: NextRequest) {
   }
 
   // Map the joined thread_tweets_rel into the thread field, sorted by position
-  const bookmarks = (data || []).map((bm: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bookmarks = (data || []).map((bm: Record<string, any>) => {
     const threadTweets = (bm.thread_tweets_rel || []).sort(
-      (a: any, b: any) => a.position - b.position
+      (a: { position: number }, b: { position: number }) => a.position - b.position
     )
     const { thread_tweets_rel, ...rest } = bm
     return { ...rest, thread: threadTweets.length > 0 ? threadTweets : undefined }
@@ -39,7 +40,8 @@ export async function GET(request: NextRequest) {
 
   const hasMore = bookmarks.length > limit
   const items = hasMore ? bookmarks.slice(0, limit) : bookmarks
-  const nextCursor = hasMore ? items[items.length - 1]?.raindrop_created_at : null
+  const lastItem = items[items.length - 1]
+  const nextCursor = hasMore && lastItem ? (lastItem as Record<string, unknown>).raindrop_created_at as string : null
 
   return NextResponse.json({ bookmarks: items, nextCursor })
 }

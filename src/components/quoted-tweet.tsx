@@ -20,7 +20,7 @@ export function QuotedTweet({ quote }: QuotedTweetProps) {
       role="link"
       tabIndex={0}
       onClick={handleClick}
-      onKeyDown={(e) => { if (e.key === "Enter") handleClick(e as any) }}
+      onKeyDown={(e) => { if (e.key === "Enter") handleClick(e as unknown as React.MouseEvent) }}
       className="mt-2.5 cursor-pointer rounded-xl border p-3 transition-colors"
       style={{
         borderColor: "var(--color-border)",

@@ -7,8 +7,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
   const result = await model.embedContent({
     content: { parts: [{ text }] },
-    taskType: 'RETRIEVAL_DOCUMENT' as any,
+    taskType: 'RETRIEVAL_DOCUMENT',
     outputDimensionality: 768,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)
 
   return result.embedding.values
@@ -19,8 +20,9 @@ export async function generateQueryEmbedding(text: string): Promise<number[]> {
 
   const result = await model.embedContent({
     content: { parts: [{ text }] },
-    taskType: 'RETRIEVAL_QUERY' as any,
+    taskType: 'RETRIEVAL_QUERY',
     outputDimensionality: 768,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)
 
   return result.embedding.values

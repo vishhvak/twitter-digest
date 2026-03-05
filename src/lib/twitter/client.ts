@@ -41,10 +41,10 @@ interface TwitterApiTweet {
     following?: number
   }
   entities: {
-    hashtags: any[]
-    urls: any[]
-    mentions: any[]
-    media?: any[]
+    hashtags: { text: string }[]
+    urls: { url: string; expanded_url?: string; display_url?: string }[]
+    mentions: { screen_name: string }[]
+    media?: { media_url_https: string; url?: string; type: string }[]
   }
   extendedEntities?: {
     media?: {
@@ -82,13 +82,6 @@ interface TwitterApiArticle {
   createdAt: string
 }
 
-interface ThreadContextResponse {
-  replies: TwitterApiTweet[]
-  has_next_page: boolean
-  next_cursor: string
-  status: string
-  message: string
-}
 
 interface TweetsResponse {
   tweets: TwitterApiTweet[]
@@ -207,14 +200,16 @@ export function extractMediaFromTweet(tweet: TwitterApiTweet): { url: string; ty
   const media: { url: string; type: string }[] = []
 
   // Check extendedEntities first (has full-size images and video)
-  const extMedia = (tweet as any).extendedEntities?.media || (tweet as any).extended_entities?.media
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tweetAny = tweet as any
+  const extMedia = tweetAny.extendedEntities?.media || tweetAny.extended_entities?.media
   if (extMedia?.length) {
     for (const m of extMedia) {
       if (m.type === 'video' || m.type === 'animated_gif') {
         // Get best quality video variant
         const variants = m.video_info?.variants
-          ?.filter((v: any) => v.content_type === 'video/mp4')
-          ?.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))
+          ?.filter((v: { content_type: string }) => v.content_type === 'video/mp4')
+          ?.sort((a: { bitrate?: number }, b: { bitrate?: number }) => (b.bitrate || 0) - (a.bitrate || 0))
         if (variants?.length) {
           media.push({ url: variants[0].url, type: m.type })
         } else {
@@ -231,7 +226,7 @@ export function extractMediaFromTweet(tweet: TwitterApiTweet): { url: string; ty
   if (tweet.entities?.media?.length) {
     for (const m of tweet.entities.media) {
       media.push({
-        url: m.media_url_https || m.url,
+        url: m.media_url_https || m.url || '',
         type: m.type || 'photo',
       })
     }

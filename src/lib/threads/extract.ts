@@ -90,7 +90,7 @@ function findLinkedArticleUrl(tweet: TwitterApiTweet): string | null {
 export async function extractThread(
   bookmarkId: string,
   tweetUrl: string,
-  expectedAuthor: string | null
+  _expectedAuthor: string | null
 ): Promise<{ isThread: boolean; tweetCount: number }> {
   const apiKey = process.env.TWITTER_API_KEY
   if (!apiKey) {

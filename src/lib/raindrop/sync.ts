@@ -269,11 +269,12 @@ async function detectThreadsPhase(supabase: ReturnType<typeof createAdminClient>
               .eq('id', bm.id)
           }
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Abort on payment/rate limit errors to avoid wasting remaining calls
-        if (e?.status === 402 || e?.status === 429) {
-          log.warn(`Twitter API ${e.status} — stopping thread detection (credits exhausted or rate limited)`)
-          appendSyncLog(`Twitter API ${e.status} — stopping thread detection`)
+        const status = (e as { status?: number })?.status
+        if (status === 402 || status === 429) {
+          log.warn(`Twitter API ${status} — stopping thread detection (credits exhausted or rate limited)`)
+          appendSyncLog(`Twitter API ${status} — stopping thread detection`)
           rateLimited = true
           break
         }

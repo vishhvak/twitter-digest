@@ -481,7 +481,7 @@ export default function FeedPage() {
                   className="py-8 text-center text-[13px]"
                   style={{ color: "var(--color-text-tertiary)" }}
                 >
-                  You've reached the end
+                  You&apos;ve reached the end
                 </p>
               )}
             </div>

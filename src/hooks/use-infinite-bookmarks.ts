@@ -40,8 +40,8 @@ export function useInfiniteBookmarks(tag?: string) {
       cursorRef.current = nextCursor
       hasMoreRef.current = !!nextCursor
       setHasMore(!!nextCursor)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       loadingMoreRef.current = false
       setLoadingMore(false)
@@ -118,8 +118,8 @@ export function useInfiniteBookmarks(tag?: string) {
       hasMoreRef.current = !!nextCursor
       setHasMore(!!nextCursor)
       setError(null)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setRefreshing(false)
     }

@@ -76,7 +76,7 @@ export async function hybridSearch(query: string, limit = 20, author?: string | 
   return merged
 }
 
-async function keywordSearch(supabase: any, query: string, limit: number, author?: string | null): Promise<Bookmark[]> {
+async function keywordSearch(supabase: ReturnType<typeof createAdminClient>, query: string, limit: number, author?: string | null): Promise<Bookmark[]> {
   const start = Date.now()
   let q = supabase
     .from('bookmarks')
@@ -100,7 +100,7 @@ async function keywordSearch(supabase: any, query: string, limit: number, author
   return data || []
 }
 
-async function semanticSearch(supabase: any, query: string, limit: number, author?: string | null): Promise<Bookmark[]> {
+async function semanticSearch(supabase: ReturnType<typeof createAdminClient>, query: string, limit: number, author?: string | null): Promise<Bookmark[]> {
   const start = Date.now()
   try {
     const embedding = await generateQueryEmbedding(query)

@@ -1,5 +1,6 @@
 import * as pdfParseModule from 'pdf-parse'
-const pdfParse = (pdfParseModule as any).default || pdfParseModule
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const pdfParse = (pdfParseModule as Record<string, any>).default || pdfParseModule
 
 export async function extractFromPdf(url: string): Promise<{
   text: string

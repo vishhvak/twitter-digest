@@ -100,7 +100,7 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
         if (bookmark.tags.length > 0) entry += `\n   Tags: ${bookmark.tags.join(', ')}`
         if (bookmark.is_thread && bookmark.thread_tweets?.length > 0) {
           const threadText = bookmark.thread_tweets
-            .map((t: any, j: number) => `   [Thread ${j + 1}]: ${t.text || ''}`)
+            .map((t: { text?: string }, j: number) => `   [Thread ${j + 1}]: ${t.text || ''}`)
             .join('\n')
           entry += `\n${threadText}`
         }
@@ -166,12 +166,13 @@ Output JSON schema:
         response_format: { type: 'json_object' },
         max_completion_tokens: 32000,
       })
-    } catch (apiError: any) {
+    } catch (apiError: unknown) {
+      const err = apiError as { message?: string; status?: number; code?: string; type?: string }
       log.error('OpenAI API call failed', {
-        message: apiError.message,
-        status: apiError.status,
-        code: apiError.code,
-        type: apiError.type,
+        message: err.message,
+        status: err.status,
+        code: err.code,
+        type: err.type,
       })
       throw apiError
     }
@@ -205,7 +206,7 @@ Output JSON schema:
       .update({
         content: digestContent,
         raw_markdown: markdown,
-        bookmark_ids: bookmarks.map((b: any) => b.id),
+        bookmark_ids: bookmarks.map((b: { id: string }) => b.id),
         status: 'complete',
       })
       .eq('id', digest.id)

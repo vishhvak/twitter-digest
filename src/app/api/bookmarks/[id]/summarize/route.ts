@@ -35,9 +35,9 @@ export async function POST(
   if (bookmark.article_content?.body) {
     content = `Article: ${bookmark.article_content.title || ''}\n\n${bookmark.article_content.body}`
   } else if (bookmark.is_thread && bookmark.thread_tweets?.length > 0) {
-    const sorted = bookmark.thread_tweets.sort((a: any, b: any) => a.position - b.position)
+    const sorted = bookmark.thread_tweets.sort((a: { position: number }, b: { position: number }) => a.position - b.position)
     content = `Thread by @${bookmark.tweet_author || 'unknown'}:\n\n` +
-      sorted.map((t: any, i: number) => `[${i + 1}/${sorted.length}] ${t.tweet_text}`).join('\n\n')
+      sorted.map((t: { tweet_text: string }, i: number) => `[${i + 1}/${sorted.length}] ${t.tweet_text}`).join('\n\n')
   } else {
     content = bookmark.tweet_text || bookmark.excerpt || bookmark.title || ''
   }

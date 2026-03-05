@@ -7,6 +7,7 @@ export async function extractWithStagehand(url: string): Promise<{
 } | null> {
   // Dynamic import to avoid build-time resolution issues
   // Stagehand has native dependencies that don't bundle well with Next.js
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let Stagehand: any
   try {
     const mod = await import('@browserbasehq/stagehand')
@@ -16,6 +17,7 @@ export async function extractWithStagehand(url: string): Promise<{
     return null
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let stagehand: any = null
 
   try {
