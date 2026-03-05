@@ -23,6 +23,47 @@ export default function FeedPage() {
   const { bookmarks, loading, loadingMore, hasMore, error, sentinelRef, removeBookmark, refreshing, refresh } =
     useInfiniteBookmarks()
 
+  // Pull-to-refresh touch gesture
+  const [pullDistance, setPullDistance] = useState(0)
+  const touchStartY = useRef(0)
+  const isPulling = useRef(false)
+
+  useEffect(() => {
+    const threshold = 80
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0) {
+        touchStartY.current = e.touches[0].clientY
+        isPulling.current = true
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPulling.current) return
+      const dy = e.touches[0].clientY - touchStartY.current
+      if (dy > 0) {
+        setPullDistance(Math.min(dy * 0.5, 120))
+      }
+    }
+
+    const onTouchEnd = () => {
+      if (isPulling.current && pullDistance > threshold && !refreshing) {
+        refresh()
+      }
+      isPulling.current = false
+      setPullDistance(0)
+    }
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true })
+    window.addEventListener("touchmove", onTouchMove, { passive: true })
+    window.addEventListener("touchend", onTouchEnd)
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart)
+      window.removeEventListener("touchmove", onTouchMove)
+      window.removeEventListener("touchend", onTouchEnd)
+    }
+  }, [pullDistance, refreshing, refresh])
+
   // Search state
   const [query, setQuery] = useState("")
   const [authorFilter, setAuthorFilter] = useState<AuthorSuggestion | null>(null)
@@ -157,12 +198,23 @@ export default function FeedPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-4">
-      {/* Refresh indicator */}
-      {refreshing && (
-        <div className="mb-3 flex items-center justify-center gap-2 py-2">
-          <RefreshCw size={14} className="animate-spin" style={{ color: "var(--color-accent)" }} />
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 0 || refreshing) && (
+        <div
+          className="flex items-center justify-center gap-2 overflow-hidden transition-all"
+          style={{ height: refreshing ? 40 : pullDistance > 0 ? Math.min(pullDistance, 60) : 0 }}
+        >
+          <RefreshCw
+            size={16}
+            className={refreshing ? "animate-spin" : ""}
+            style={{
+              color: "var(--color-accent)",
+              transform: `rotate(${pullDistance * 3}deg)`,
+              opacity: Math.min(pullDistance / 60, 1),
+            }}
+          />
           <span className="text-[13px]" style={{ color: "var(--color-text-secondary)" }}>
-            Syncing new bookmarks...
+            {refreshing ? "Syncing..." : pullDistance > 80 ? "Release to sync" : "Pull to sync"}
           </span>
         </div>
       )}

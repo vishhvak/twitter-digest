@@ -114,7 +114,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/cron/sync-raindrop${modeParam}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || ""}` },
+        headers: process.env.NEXT_PUBLIC_CRON_SECRET ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}` } : {},
       })
       clearInterval(pollInterval)
 
@@ -151,7 +151,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/cron/generate-digest?type=${type}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || ""}` },
+        headers: process.env.NEXT_PUBLIC_CRON_SECRET ? { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}` } : {},
       })
       if (res.ok) {
         showToast(`${type} digest generation started`, "success")

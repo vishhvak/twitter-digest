@@ -2,10 +2,16 @@ import OpenAI from 'openai'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { extractContent } from './extract'
 import { Bookmark, DigestContent } from '@/lib/supabase/types'
+import { createLogger } from '@/lib/logger'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const log = createLogger('digest')
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3.5)
+}
 
 export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   const supabase = createAdminClient()
   const now = new Date()
   const periodStart = new Date(now)
@@ -15,6 +21,8 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
   } else {
     periodStart.setDate(periodStart.getDate() - 7)
   }
+
+  log.info(`Generating ${type} digest: ${periodStart.toISOString()} → ${now.toISOString()}`)
 
   const { data: digest, error: insertError } = await supabase
     .from('digests')
@@ -28,8 +36,11 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
     .single()
 
   if (insertError || !digest) {
+    log.error('Failed to create digest row', insertError)
     throw new Error(`Failed to create digest: ${insertError?.message}`)
   }
+
+  log.info(`Digest row created: ${digest.id}`)
 
   try {
     const { data: bookmarks } = await supabase
@@ -38,6 +49,8 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
       .gte('raindrop_created_at', periodStart.toISOString())
       .lte('raindrop_created_at', now.toISOString())
       .order('raindrop_created_at', { ascending: false })
+
+    log.info(`Found ${bookmarks?.length || 0} bookmarks in period`)
 
     if (!bookmarks || bookmarks.length === 0) {
       await supabase
@@ -60,18 +73,23 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
         continue
       }
 
-      const result = await extractContent(bm.url)
-      if (result) {
-        await supabase.from('extracted_content').insert({
-          bookmark_id: bm.id,
-          source_url: bm.url,
-          extraction_method: result.method,
-          title: result.title,
-          content: result.content.slice(0, 10000),
-          content_type: result.contentType,
-        })
-        extractions.push({ bookmark: bm, extracted: result.content })
-      } else {
+      try {
+        const result = await extractContent(bm.url)
+        if (result) {
+          await supabase.from('extracted_content').insert({
+            bookmark_id: bm.id,
+            source_url: bm.url,
+            extraction_method: result.method,
+            title: result.title,
+            content: result.content.slice(0, 10000),
+            content_type: result.contentType,
+          })
+          extractions.push({ bookmark: bm, extracted: result.content })
+        } else {
+          extractions.push({ bookmark: bm, extracted: null })
+        }
+      } catch (e) {
+        log.warn(`Content extraction failed for ${bm.url}: ${e}`)
         extractions.push({ bookmark: bm, extracted: null })
       }
     }
@@ -80,28 +98,22 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
       .map(({ bookmark, extracted }, i) => {
         let entry = `[${i + 1}] Tweet by @${bookmark.tweet_author || 'unknown'}: "${bookmark.tweet_text || bookmark.title || bookmark.excerpt || 'No text'}"\n   URL: ${bookmark.url}`
         if (bookmark.tags.length > 0) entry += `\n   Tags: ${bookmark.tags.join(', ')}`
-        // Include thread tweets
         if (bookmark.is_thread && bookmark.thread_tweets?.length > 0) {
           const threadText = bookmark.thread_tweets
             .map((t: any, j: number) => `   [Thread ${j + 1}]: ${t.text || ''}`)
             .join('\n')
           entry += `\n${threadText}`
         }
-        // Include article content
         if (bookmark.article_content?.body) {
-          entry += `\n   Article: ${bookmark.article_content.title || ''}\n   ${bookmark.article_content.body}`
+          const body = bookmark.article_content.body.slice(0, 2000)
+          entry += `\n   Article: ${bookmark.article_content.title || ''}\n   ${body}`
         }
-        if (extracted) entry += `\n   Linked content: ${extracted}`
+        if (extracted) entry += `\n   Linked content: ${extracted.slice(0, 2000)}`
         return entry
       })
       .join('\n\n')
 
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_DIGEST_MODEL || 'gpt-5-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a research digest assistant. You analyze a user's saved Twitter bookmarks and their linked content to produce an insightful digest.
+    const systemPrompt = `You are a research digest assistant. You analyze a user's saved Twitter bookmarks and their linked content to produce an insightful digest.
 
 Rules:
 - Group bookmarks by topic/theme (AI, engineering, design, etc.)
@@ -109,11 +121,10 @@ Rules:
 - Cite specific tweets using [N] notation matching the input numbering
 - Highlight key papers, tools, threads, and notable takes
 - Be concise but substantive — each section should teach something
-- Output valid JSON matching the schema below`,
-        },
-        {
-          role: 'user',
-          content: `Generate a ${type} digest for ${bookmarks.length} bookmarks saved between ${periodStart.toLocaleDateString()} and ${now.toLocaleDateString()}.
+- Keep insights brief (1-2 sentences each). Do NOT repeat full tweet text in the output — just reference with [N]
+- Output valid JSON matching the schema below`
+
+    const userPrompt = `Generate a ${type} digest for ${bookmarks.length} bookmarks saved between ${periodStart.toLocaleDateString()} and ${now.toLocaleDateString()}.
 
 Bookmarks:
 ${bookmarkSummaries}
@@ -128,7 +139,7 @@ Output JSON schema:
       "items": [
         {
           "bookmark_id": "string — UUID from bookmark",
-          "tweet_text": "string — original tweet text",
+          "tweet_text": "string — short excerpt (max 100 chars)",
           "tweet_author": "string — @handle",
           "insight": "string — what's notable about this",
           "sources": [
@@ -138,16 +149,54 @@ Output JSON schema:
       ]
     }
   ]
-}`,
-        },
-      ],
-      response_format: { type: 'json_object' },
-      max_completion_tokens: 4000,
-    })
+}`
 
-    const digestContent = JSON.parse(
-      response.choices[0].message.content || '{}'
-    ) as DigestContent
+    const inputTokens = estimateTokens(systemPrompt + userPrompt)
+    log.info(`Sending to OpenAI: model=${process.env.OPENAI_DIGEST_MODEL || 'gpt-5-mini'}, ~${inputTokens} input tokens, ${bookmarks.length} bookmarks, ${bookmarkSummaries.length} chars`)
+
+    const start = Date.now()
+    let response
+    try {
+      response = await openai.chat.completions.create({
+        model: process.env.OPENAI_DIGEST_MODEL || 'gpt-5-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 32000,
+      })
+    } catch (apiError: any) {
+      log.error('OpenAI API call failed', {
+        message: apiError.message,
+        status: apiError.status,
+        code: apiError.code,
+        type: apiError.type,
+      })
+      throw apiError
+    }
+    const elapsed = Date.now() - start
+
+    const usage = response.usage
+    log.info(`OpenAI response in ${elapsed}ms — prompt_tokens: ${usage?.prompt_tokens}, completion_tokens: ${usage?.completion_tokens}, total: ${usage?.total_tokens}, finish_reason: ${response.choices[0]?.finish_reason}`)
+
+    const choice = response.choices[0]
+    const rawContent = choice?.message?.content
+    if (!rawContent) {
+      log.error('OpenAI returned empty content', {
+        finish_reason: choice?.finish_reason,
+        refusal: choice?.message?.refusal,
+        choices_count: response.choices?.length,
+        usage: response.usage,
+      })
+      throw new Error(`OpenAI returned empty content (finish_reason: ${choice?.finish_reason})`)
+    }
+
+    log.info(`Raw response length: ${rawContent.length} chars`)
+
+    const digestContent = JSON.parse(rawContent) as DigestContent
+
+    log.info(`Parsed digest: "${digestContent.title}", ${digestContent.sections?.length || 0} sections`)
 
     const markdown = renderDigestMarkdown(digestContent, type, periodStart, now)
 
@@ -161,8 +210,10 @@ Output JSON schema:
       })
       .eq('id', digest.id)
 
+    log.info(`Digest ${digest.id} complete`)
     return digest.id
   } catch (error) {
+    log.error('Digest generation failed', error)
     await supabase.from('digests').update({ status: 'failed' }).eq('id', digest.id)
     throw error
   }
