@@ -1,4 +1,7 @@
+import { createLogger } from '@/lib/logger'
+
 const TWITTER_API_BASE = 'https://api.twitterapi.io'
+const log = createLogger('twitter-api')
 
 interface TwitterApiTweet {
   type: string
@@ -66,6 +69,19 @@ interface TwitterApiTweet {
   retweeted_tweet: TwitterApiTweet | null
 }
 
+interface TwitterApiArticle {
+  author: TwitterApiTweet['author']
+  title: string
+  preview_text: string
+  cover_media_img_url: string | null
+  contents: { text: string }[]
+  replyCount: number
+  likeCount: number
+  quoteCount: number
+  viewCount: number
+  createdAt: string
+}
+
 interface ThreadContextResponse {
   replies: TwitterApiTweet[]
   has_next_page: boolean
@@ -93,15 +109,25 @@ export class TwitterApiClient {
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
     }
 
+    log.info(`→ ${path}`, params)
+    const start = Date.now()
+
     const res = await fetch(url.toString(), {
       headers: { 'x-api-key': this.apiKey },
     })
 
+    const elapsed = Date.now() - start
+
     if (!res.ok) {
-      throw new Error(`TwitterAPI.io error: ${res.status} ${res.statusText}`)
+      log.error(`← ${path} ${res.status} ${res.statusText} (${elapsed}ms)`)
+      const err = new Error(`TwitterAPI.io error: ${res.status} ${res.statusText}`) as Error & { status: number }
+      err.status = res.status
+      throw err
     }
 
-    return res.json()
+    const data = await res.json() as T
+    log.info(`← ${path} ${res.status} (${elapsed}ms)`)
+    return data
   }
 
   /**
@@ -112,8 +138,29 @@ export class TwitterApiClient {
       tweet_ids: tweetId,
     })
 
-    if (data.status !== 'success' || !data.tweets?.length) return null
-    return data.tweets[0]
+    if (data.status !== 'success' || !data.tweets?.length) {
+      log.warn(`getTweet(${tweetId}): API returned status=${data.status}, tweets=${data.tweets?.length || 0}`)
+      return null
+    }
+    const tweet = data.tweets[0]
+    log.info(`getTweet(${tweetId}): @${tweet.author?.userName || tweet.author?.username} — "${tweet.text?.slice(0, 80)}..."`)
+    return tweet
+  }
+
+  /**
+   * Fetch a Twitter article by tweet ID.
+   */
+  async getArticle(tweetId: string): Promise<TwitterApiArticle | null> {
+    const data = await this.fetch<{ article: TwitterApiArticle | null; status: string }>(
+      '/twitter/article',
+      { tweet_id: tweetId }
+    )
+    if (data.status !== 'success' || !data.article) {
+      log.warn(`getArticle(${tweetId}): API returned status=${data.status}, article=${!!data.article}`)
+      return null
+    }
+    log.info(`getArticle(${tweetId}): "${data.article.title}" (${data.article.contents?.length || 0} blocks)`)
+    return data.article
   }
 
   /**
@@ -142,10 +189,13 @@ export class TwitterApiClient {
         allTweets.push(...data.tweets)
       }
 
+      log.info(`getThreadTweets(${conversationId}, @${authorHandle}): page ${page + 1} → ${data.tweets?.length || 0} tweets, hasNext=${data.has_next_page}`)
+
       if (!data.has_next_page || !data.next_cursor) break
       cursor = data.next_cursor
     }
 
+    log.info(`getThreadTweets(${conversationId}, @${authorHandle}): total ${allTweets.length} tweets`)
     return allTweets
   }
 }
@@ -210,4 +260,4 @@ export function getAuthorId(tweet: TwitterApiTweet): string {
   return tweet.author?.id || ''
 }
 
-export type { TwitterApiTweet }
+export type { TwitterApiTweet, TwitterApiArticle }

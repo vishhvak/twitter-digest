@@ -1,3 +1,19 @@
+export interface ArticleContent {
+  title: string
+  preview_text: string
+  cover_image_url: string | null
+  body: string
+}
+
+export interface QuotedTweet {
+  url: string
+  text: string
+  author_handle: string
+  author_name: string
+  author_avatar_url: string
+  media: MediaItem[]
+}
+
 export interface Bookmark {
   id: string
   raindrop_id: number
@@ -17,6 +33,8 @@ export interface Bookmark {
   is_thread: boolean
   thread_tweets: ThreadTweetLegacy[]
   thread_tweet_count: number
+  quoted_tweet: QuotedTweet | null
+  article_content: ArticleContent | null
   raindrop_created_at: string | null
   raindrop_updated_at: string | null
   created_at: string
