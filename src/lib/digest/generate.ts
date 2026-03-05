@@ -70,7 +70,7 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
           content: result.content.slice(0, 10000),
           content_type: result.contentType,
         })
-        extractions.push({ bookmark: bm, extracted: result.content.slice(0, 3000) })
+        extractions.push({ bookmark: bm, extracted: result.content })
       } else {
         extractions.push({ bookmark: bm, extracted: null })
       }
@@ -80,7 +80,18 @@ export async function generateDigest(type: 'daily' | 'weekly'): Promise<string> 
       .map(({ bookmark, extracted }, i) => {
         let entry = `[${i + 1}] Tweet by @${bookmark.tweet_author || 'unknown'}: "${bookmark.tweet_text || bookmark.title || bookmark.excerpt || 'No text'}"\n   URL: ${bookmark.url}`
         if (bookmark.tags.length > 0) entry += `\n   Tags: ${bookmark.tags.join(', ')}`
-        if (extracted) entry += `\n   Linked content: ${extracted.slice(0, 1000)}`
+        // Include thread tweets
+        if (bookmark.is_thread && bookmark.thread_tweets?.length > 0) {
+          const threadText = bookmark.thread_tweets
+            .map((t: any, j: number) => `   [Thread ${j + 1}]: ${t.text || ''}`)
+            .join('\n')
+          entry += `\n${threadText}`
+        }
+        // Include article content
+        if (bookmark.article_content?.body) {
+          entry += `\n   Article: ${bookmark.article_content.title || ''}\n   ${bookmark.article_content.body}`
+        }
+        if (extracted) entry += `\n   Linked content: ${extracted}`
         return entry
       })
       .join('\n\n')
@@ -131,8 +142,7 @@ Output JSON schema:
         },
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.7,
-      max_tokens: 4000,
+      max_completion_tokens: 4000,
     })
 
     const digestContent = JSON.parse(
