@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { BookOpen, Calendar, ChevronRight, Loader2 } from "lucide-react"
+import { BookOpen, Calendar, ChevronRight, Loader2, Trash2 } from "lucide-react"
 import { Digest } from "@/lib/supabase/types"
+import { ConfirmModal } from "@/components/confirm-modal"
 
 export default function DigestListPage() {
   const [digests, setDigests] = useState<Digest[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/digests?limit=20")
@@ -23,6 +26,35 @@ export default function DigestListPage() {
       day: "numeric",
       year: "numeric",
     })
+
+  const formatTime = (d: string) =>
+    new Date(d).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    })
+
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDeleteTarget(id)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    const id = deleteTarget
+    setDeleteTarget(null)
+    setDeleting(id)
+    try {
+      const res = await fetch(`/api/digests/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setDigests((prev) => prev.filter((d) => d.id !== id))
+      }
+    } catch {
+      // ignore
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-4">
@@ -135,18 +167,51 @@ export default function DigestListPage() {
                         {digest.period_start && formatDate(digest.period_start)}
                         {digest.period_end && ` — ${formatDate(digest.period_end)}`}
                       </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: "var(--color-text-tertiary)" }}
+                      >
+                        · {formatDate(digest.created_at)} {formatTime(digest.created_at)}
+                      </span>
                     </div>
                   </div>
                 </div>
-                <ChevronRight
-                  size={16}
-                  style={{ color: "var(--color-text-tertiary)" }}
-                />
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={(e) => handleDeleteClick(e, digest.id)}
+                    disabled={deleting === digest.id}
+                    className="rounded-lg p-2 transition-colors"
+                    style={{ color: "var(--color-text-tertiary)" }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.color = "var(--color-error)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.color = "var(--color-text-tertiary)")
+                    }
+                  >
+                    {deleting === digest.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </button>
+                  <ChevronRight
+                    size={16}
+                    style={{ color: "var(--color-text-tertiary)" }}
+                  />
+                </div>
               </div>
             </Link>
           ))}
         </div>
       )}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete digest?"
+        message="This digest will be permanently removed. This action cannot be undone."
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

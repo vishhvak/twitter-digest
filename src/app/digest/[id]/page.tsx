@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, ExternalLink } from "lucide-react"
+import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react"
 import { Digest } from "@/lib/supabase/types"
+import { ConfirmModal } from "@/components/confirm-modal"
 
 export default function DigestDetailPage() {
   const params = useParams()
   const router = useRouter()
   const [digest, setDigest] = useState<Digest | null>(null)
   const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
+  const [showRegenModal, setShowRegenModal] = useState(false)
 
   useEffect(() => {
     if (!params.id) return
@@ -41,19 +44,51 @@ export default function DigestDetailPage() {
     )
   }
 
+  const handleRegenerate = async () => {
+    setShowRegenModal(false)
+    setRegenerating(true)
+    try {
+      const res = await fetch(`/api/digests/${params.id}/regenerate`, { method: "POST" })
+      const data = await res.json()
+      if (data.digestId) {
+        router.replace(`/digest/${data.digestId}`)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   const content = digest.content
 
   return (
     <div className="mx-auto max-w-[680px] px-4 py-4">
-      {/* Back button */}
-      <button
-        onClick={() => router.back()}
-        className="mb-4 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors"
-        style={{ color: "var(--color-text-secondary)" }}
-      >
-        <ArrowLeft size={14} />
-        Back
-      </button>
+      {/* Top bar */}
+      <div className="mb-4 flex items-center justify-between">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors"
+          style={{ color: "var(--color-text-secondary)" }}
+        >
+          <ArrowLeft size={14} />
+          Back
+        </button>
+        <button
+          onClick={() => setShowRegenModal(true)}
+          disabled={regenerating}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors"
+          style={{
+            color: "var(--color-text-secondary)",
+            opacity: regenerating ? 0.5 : 1,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        >
+          <RefreshCw size={13} className={regenerating ? "animate-spin" : ""} />
+          {regenerating ? "Regenerating..." : "Regenerate"}
+        </button>
+      </div>
 
       {/* Header */}
       <header className="mb-6">
@@ -193,6 +228,15 @@ export default function DigestDetailPage() {
             {digest.raw_markdown}
           </pre>
         )}
+
+      <ConfirmModal
+        open={showRegenModal}
+        title="Regenerate digest?"
+        message="The current digest will be replaced with a freshly generated one."
+        confirmLabel="Regenerate"
+        onConfirm={handleRegenerate}
+        onCancel={() => setShowRegenModal(false)}
+      />
     </div>
   )
 }
