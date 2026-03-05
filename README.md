@@ -1,36 +1,101 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Twitter Bookmarks AI
 
-## Getting Started
+A personal webapp for searching, browsing, and digesting your Twitter/X bookmarks. Syncs from Raindrop.io, enriches tweets with thread detection and article extraction via the Twitter API, and generates AI-powered digests.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Bookmark sync** — Incremental, full, and backfill sync from Raindrop.io
+- **Hybrid search** — Keyword + semantic search with author autocomplete (`@handle`)
+- **Thread detection** — Automatically detects and displays Twitter threads with full conversation view
+- **Article extraction** — Detects linked articles in tweets, fetches content, and formats with GPT
+- **Quote tweets** — Renders embedded quoted tweets inline
+- **AI summaries** — Tap any card to flip and see a GPT-generated summary
+- **Digests** — Daily and weekly AI-generated digests that group bookmarks by theme
+- **Pull-to-refresh** — Touch gesture sync on mobile, button sync on desktop
+- **Delete & resync** — Remove bookmarks or re-fetch tweet data from the API
+
+## Tech Stack
+
+- **Frontend**: Next.js 16 (App Router), Tailwind CSS, Lucide icons
+- **Database**: Supabase (Postgres + pgvector for embeddings)
+- **Bookmark source**: Raindrop.io API
+- **Tweet enrichment**: twitterapi.io (threads, articles, tweet data)
+- **Embeddings**: Google Gemini API
+- **AI (summaries, digests, formatting)**: OpenAI GPT-5-mini
+- **Content extraction**: Mozilla Readability, Stagehand (fallback)
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- Supabase project with pgvector extension
+- API keys for: Raindrop.io, OpenAI, Google Gemini, twitterapi.io
+
+### Environment Variables
+
+Copy `.env.local.example` or create `.env.local`:
+
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Raindrop.io
+RAINDROP_TEST_TOKEN=
+
+# Embeddings
+GOOGLE_GENERATIVE_AI_API_KEY=
+
+# AI (OpenAI)
+OPENAI_API_KEY=
+OPENAI_DIGEST_MODEL=gpt-5-mini
+
+# Twitter API (twitterapi.io)
+TWITTER_API_KEY=
+
+# Cron auth (optional)
+CRON_SECRET=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Run
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+### Deploy
 
-To learn more about Next.js, take a look at the following resources:
+Deploy to Vercel. Add all environment variables in Settings > Environment Variables. Cron jobs for sync and digest generation are configured in `vercel.json`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  app/
+    page.tsx              # Home feed with search
+    digest/               # Digest list and detail pages
+    settings/             # Sync controls, digest generation
+    api/
+      bookmarks/          # CRUD, resync, summarize
+      cron/               # Scheduled sync and digest generation
+      digests/            # List, delete, regenerate
+      search/             # Hybrid search endpoint
+      sync-quick/         # Lightweight incremental sync
+      authors/            # Author autocomplete
+  components/
+    tweet-card.tsx        # Main bookmark card with flip animation
+    thread-view.tsx       # Thread conversation UI
+    quoted-tweet.tsx      # Embedded quote tweet
+    confirm-modal.tsx     # Reusable confirmation dialog
+  lib/
+    raindrop/             # Raindrop.io sync client
+    threads/              # Thread detection and extraction
+    digest/               # Digest generation and content extraction
+    search.ts             # Hybrid search (keyword + semantic)
+    supabase/             # DB client and types
+```
