@@ -106,6 +106,10 @@ export function useInfiniteBookmarks(tag?: string) {
     setBookmarks((prev) => prev.filter((b) => b.id !== id))
   }, [])
 
+  const updateBookmark = useCallback((updated: Bookmark) => {
+    setBookmarks((prev) => prev.map((b) => b.id === updated.id ? updated : b))
+  }, [])
+
   // Pull-to-refresh: quick incremental sync then reload first page
   const [refreshing, setRefreshing] = useState(false)
   const refresh = useCallback(async () => {
@@ -125,5 +129,5 @@ export function useInfiniteBookmarks(tag?: string) {
     }
   }, [fetchPage])
 
-  return { bookmarks, loading, loadingMore, hasMore, error, sentinelRef, removeBookmark, refreshing, refresh }
+  return { bookmarks, loading, loadingMore, hasMore, error, sentinelRef, removeBookmark, updateBookmark, refreshing, refresh }
 }

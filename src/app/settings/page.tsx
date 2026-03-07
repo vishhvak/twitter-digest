@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import {
   RefreshCw,
   BookOpen,
@@ -13,9 +14,12 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
+  LogOut,
 } from "lucide-react"
 import { SyncState } from "@/lib/supabase/types"
 import { formatRelativeTime } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/hooks/use-auth"
 
 interface SyncLogEntry {
   time: string
@@ -23,6 +27,16 @@ interface SyncLogEntry {
 }
 
 export default function SettingsPage() {
+  const router = useRouter()
+  const { isAdmin, loading: authLoading } = useAuth()
+
+  // Client-side auth guard — redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      router.replace("/login")
+    }
+  }, [authLoading, isAdmin, router])
+
   const [syncState, setSyncState] = useState<SyncState | null>(null)
   const [totalBookmarks, setTotalBookmarks] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -171,6 +185,14 @@ export default function SettingsPage() {
     } catch {
       return iso
     }
+  }
+
+  if (authLoading || !isAdmin) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 size={24} className="animate-spin" style={{ color: "var(--color-text-tertiary)" }} />
+      </div>
+    )
   }
 
   return (
@@ -424,6 +446,21 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {/* Logout */}
+      <button
+        onClick={async () => {
+          const supabase = createClient()
+          await supabase.auth.signOut()
+          router.push("/login")
+          router.refresh()
+        }}
+        className="card card-hover mt-3 flex w-full items-center justify-center gap-2 py-3 text-[13px] font-medium"
+        style={{ color: "var(--color-error)" }}
+      >
+        <LogOut size={14} />
+        Sign Out
+      </button>
 
       {/* App info */}
       <div

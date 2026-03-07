@@ -29,7 +29,7 @@ export function ThreadView({ thread, authorHandle }: ThreadViewProps) {
     <div className="mt-3">
       {/* Thread indicator */}
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
         className="mb-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-semibold transition-colors"
         style={{
           color: "var(--color-accent)",
@@ -129,7 +129,7 @@ export function ThreadView({ thread, authorHandle }: ThreadViewProps) {
         {/* Collapse button when expanded */}
         {expanded && (
           <button
-            onClick={() => setExpanded(false)}
+            onClick={(e) => { e.stopPropagation(); setExpanded(false) }}
             className="mt-1 flex items-center gap-1.5 text-[12px] font-medium"
             style={{ color: "var(--color-text-tertiary)" }}
           >

@@ -16,11 +16,12 @@ interface TweetCardProps {
   bookmark: Bookmark
   index?: number
   compact?: boolean
+  isAdmin?: boolean
   onUpdate?: (updated: Bookmark) => void
   onDelete?: (id: string) => void
 }
 
-export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDelete }: TweetCardProps) {
+export function TweetCard({ bookmark, index = 0, compact = false, isAdmin = false, onUpdate, onDelete }: TweetCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [articleExpanded, setArticleExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -45,6 +46,8 @@ export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDe
       setFlipped(false)
       return
     }
+    // Non-admins can only flip if there's a cached summary
+    if (!isAdmin && !summary) return
     setFlipped(true)
     if (!summary) {
       setSummaryLoading(true)
@@ -320,7 +323,7 @@ export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDe
 
       {/* Media — hidden for articles */}
       {!compact && !isArticle && filteredMedia.length > 0 && (
-        <div className="mt-2.5">
+        <div className="mt-2.5" onClick={(e) => e.stopPropagation()}>
           <TweetMedia media={filteredMedia} />
         </div>
       )}
@@ -343,12 +346,16 @@ export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDe
 
       {/* Quoted tweet */}
       {!compact && bookmark.quoted_tweet && (
-        <QuotedTweet quote={bookmark.quoted_tweet} />
+        <div onClick={(e) => e.stopPropagation()}>
+          <QuotedTweet quote={bookmark.quoted_tweet} />
+        </div>
       )}
 
       {/* Thread view */}
       {!compact && bookmark.is_thread && bookmark.thread && bookmark.thread.length > 1 && (
-        <ThreadView thread={bookmark.thread} authorHandle={bookmark.tweet_author} />
+        <div onClick={(e) => e.stopPropagation()}>
+          <ThreadView thread={bookmark.thread} authorHandle={bookmark.tweet_author} />
+        </div>
       )}
 
       {/* Domain badge */}
@@ -409,7 +416,7 @@ export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDe
           {copied ? <Check size={13} /> : <Copy size={13} />}
           {copied ? "Copied" : "Copy"}
         </button>
-        {isTwitterUrl && (
+        {isAdmin && isTwitterUrl && (
           <button
             onClick={handleResync}
             disabled={syncing}
@@ -424,22 +431,24 @@ export function TweetCard({ bookmark, index = 0, compact = false, onUpdate, onDe
             {syncing ? "Syncing" : "Sync"}
           </button>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); setShowDeleteModal(true) }}
-          disabled={deleting}
-          className="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors"
-          style={{ color: "var(--color-text-tertiary)", opacity: deleting ? 0.5 : 1 }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(248, 113, 113, 0.08)"
-            e.currentTarget.style.color = "var(--color-error)"
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent"
-            e.currentTarget.style.color = "var(--color-text-tertiary)"
-          }}
-        >
-          <Trash2 size={13} />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowDeleteModal(true) }}
+            disabled={deleting}
+            className="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors"
+            style={{ color: "var(--color-text-tertiary)", opacity: deleting ? 0.5 : 1 }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(248, 113, 113, 0.08)"
+              e.currentTarget.style.color = "var(--color-error)"
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent"
+              e.currentTarget.style.color = "var(--color-text-tertiary)"
+            }}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
 
       <ConfirmModal

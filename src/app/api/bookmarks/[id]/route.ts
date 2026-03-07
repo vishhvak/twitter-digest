@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createLogger } from '@/lib/logger'
+import { requireAuth } from '@/lib/supabase/auth'
 
 const log = createLogger('bookmark-api')
 
@@ -8,6 +9,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { authenticated } = await requireAuth()
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { id } = await params
   const supabase = createAdminClient()
 

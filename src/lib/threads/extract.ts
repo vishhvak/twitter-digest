@@ -10,6 +10,7 @@ import {
   getAuthorId,
   TwitterApiTweet,
 } from '@/lib/twitter/client'
+import { processMediaVideos } from '@/lib/storage/video'
 
 const log = createLogger('extract')
 
@@ -130,13 +131,15 @@ export async function extractThread(
     let tweetType: string | null = null
     if (mainTweet.quoted_tweet) {
       const qt = mainTweet.quoted_tweet
+      const qtMedia = extractMediaFromTweet(qt).map((m) => ({ url: m.url, type: m.type, alt_text: null }))
+      const processedQtMedia = await processMediaVideos(qtMedia, `${bookmarkId}-qt`)
       quotedTweet = {
         url: qt.url || `https://x.com/${getAuthorHandle(qt)}/status/${qt.id}`,
         text: qt.text,
         author_handle: getAuthorHandle(qt),
         author_name: getAuthorName(qt),
         author_avatar_url: getAuthorAvatar(qt),
-        media: extractMediaFromTweet(qt).map((m) => ({ url: m.url, type: m.type })),
+        media: processedQtMedia,
       }
       tweetType = 'quote'
       log.info(`Quote tweet detected: @${getAuthorHandle(qt)} — "${qt.text?.slice(0, 60)}..."`)
@@ -166,6 +169,13 @@ export async function extractThread(
       return { isThread: false, tweetCount: 1 }
     }
 
+    // Extract and process media from the main tweet (replaces Raindrop thumbnails with actual video URLs)
+    const mainMedia = extractMediaFromTweet(mainTweet)
+    const processedMainMedia = await processMediaVideos(
+      mainMedia.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+      bookmarkId
+    )
+
     // Also update the bookmark with richer tweet data from the API
     await supabase
       .from('bookmarks')
@@ -174,6 +184,7 @@ export async function extractThread(
         tweet_author_name: authorName,
         tweet_text: mainTweet.text,
         cover_image_url: authorAvatar,
+        media: processedMainMedia,
         ...(quotedTweet && { quoted_tweet: quotedTweet, tweet_type: tweetType }),
       })
       .eq('id', bookmarkId)
@@ -249,8 +260,12 @@ export async function extractThread(
     // 4. Store thread tweets in DB
     await supabase.from('thread_tweets').delete().eq('bookmark_id', bookmarkId)
 
-    const threadRows = threadTweets.map((tweet, index) => {
+    const threadRows = await Promise.all(threadTweets.map(async (tweet, index) => {
       const media = extractMediaFromTweet(tweet)
+      const processedMedia = await processMediaVideos(
+        media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+        `${bookmarkId}-t${index}`
+      )
       return {
         bookmark_id: bookmarkId,
         position: index + 1,
@@ -259,10 +274,10 @@ export async function extractThread(
         author_name: getAuthorName(tweet) || authorName,
         author_avatar_url: getAuthorAvatar(tweet) || authorAvatar,
         tweet_text: tweet.text,
-        media: media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+        media: processedMedia,
         tweet_created_at: tweet.createdAt ? new Date(tweet.createdAt).toISOString() : null,
       }
-    })
+    }))
 
     const { error } = await supabase.from('thread_tweets').insert(threadRows)
 
@@ -391,6 +406,10 @@ export async function enrichBookmarkFromTwitter(
     if (!tweet) return
 
     const media = extractMediaFromTweet(tweet)
+    const processedMedia = await processMediaVideos(
+      media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+      bookmarkId
+    )
 
     await supabase
       .from('bookmarks')
@@ -399,7 +418,7 @@ export async function enrichBookmarkFromTwitter(
         tweet_author_name: getAuthorName(tweet),
         tweet_text: tweet.text,
         cover_image_url: getAuthorAvatar(tweet),
-        media: media.map((m) => ({ url: m.url, type: m.type, alt_text: null })),
+        media: processedMedia,
       })
       .eq('id', bookmarkId)
 

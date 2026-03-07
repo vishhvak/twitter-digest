@@ -5,8 +5,10 @@ import Link from "next/link"
 import { BookOpen, Calendar, ChevronRight, Loader2, Trash2 } from "lucide-react"
 import { Digest } from "@/lib/supabase/types"
 import { ConfirmModal } from "@/components/confirm-modal"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function DigestListPage() {
+  const { isAdmin } = useAuth()
   const [digests, setDigests] = useState<Digest[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -177,24 +179,26 @@ export default function DigestListPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={(e) => handleDeleteClick(e, digest.id)}
-                    disabled={deleting === digest.id}
-                    className="rounded-lg p-2 transition-colors"
-                    style={{ color: "var(--color-text-tertiary)" }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.color = "var(--color-error)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.color = "var(--color-text-tertiary)")
-                    }
-                  >
-                    {deleting === digest.id ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => handleDeleteClick(e, digest.id)}
+                      disabled={deleting === digest.id}
+                      className="rounded-lg p-2 transition-colors"
+                      style={{ color: "var(--color-text-tertiary)" }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.color = "var(--color-error)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.color = "var(--color-text-tertiary)")
+                      }
+                    >
+                      {deleting === digest.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                    </button>
+                  )}
                   <ChevronRight
                     size={16}
                     style={{ color: "var(--color-text-tertiary)" }}

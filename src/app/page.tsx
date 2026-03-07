@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Search as SearchIcon, X, Bookmark as BookmarkIcon, RefreshCw } from "lucide-react"
 import { useInfiniteBookmarks } from "@/hooks/use-infinite-bookmarks"
+import { useAuth } from "@/hooks/use-auth"
 import { TweetCard } from "@/components/tweet-card"
 import { SkeletonCard } from "@/components/skeleton-card"
 import { Bookmark } from "@/lib/supabase/types"
@@ -20,7 +21,8 @@ interface AuthorSuggestion {
 }
 
 export default function FeedPage() {
-  const { bookmarks, loading, loadingMore, hasMore, error, sentinelRef, removeBookmark, refreshing, refresh } =
+  const { isAdmin } = useAuth()
+  const { bookmarks, loading, loadingMore, hasMore, error, sentinelRef, removeBookmark, updateBookmark, refreshing, refresh } =
     useInfiniteBookmarks()
 
   // Pull-to-refresh touch gesture
@@ -32,6 +34,7 @@ export default function FeedPage() {
     const threshold = 80
 
     const onTouchStart = (e: TouchEvent) => {
+      if (!isAdmin) return
       if (window.scrollY === 0) {
         touchStartY.current = e.touches[0].clientY
         isPulling.current = true
@@ -62,7 +65,7 @@ export default function FeedPage() {
       window.removeEventListener("touchmove", onTouchMove)
       window.removeEventListener("touchend", onTouchEnd)
     }
-  }, [pullDistance, refreshing, refresh])
+  }, [pullDistance, refreshing, refresh, isAdmin])
 
   // Search state
   const [query, setQuery] = useState("")
@@ -225,7 +228,7 @@ export default function FeedPage() {
           className="card flex items-center gap-2 px-4 py-3"
           style={{ borderColor: query || authorFilter ? "var(--color-accent)" : undefined }}
         >
-          {!isSearchActive ? (
+          {!isSearchActive && isAdmin ? (
             <button
               onClick={refresh}
               disabled={refreshing}
@@ -405,7 +408,7 @@ export default function FeedPage() {
                     {(result.score * 100).toFixed(1)}
                   </span>
                 </div>
-                <TweetCard bookmark={result} index={i} onDelete={(id) => {
+                <TweetCard bookmark={result} index={i} isAdmin={isAdmin} onDelete={(id) => {
                   setResults((prev) => prev.filter((r) => r.id !== id))
                 }} />
               </div>
@@ -462,7 +465,7 @@ export default function FeedPage() {
           {!loading && bookmarks.length > 0 && (
             <div className="space-y-3">
               {bookmarks.map((bookmark, i) => (
-                <TweetCard key={bookmark.id} bookmark={bookmark} index={i} onDelete={removeBookmark} />
+                <TweetCard key={bookmark.id} bookmark={bookmark} index={i} isAdmin={isAdmin} onUpdate={updateBookmark} onDelete={removeBookmark} />
               ))}
 
               {hasMore && (

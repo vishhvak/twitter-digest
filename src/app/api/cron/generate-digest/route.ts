@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateDigest } from '@/lib/digest/generate'
 import { createLogger } from '@/lib/logger'
+import { requireAuth } from '@/lib/supabase/auth'
 
 const log = createLogger('generate-digest-api')
+
+function checkCronSecret(request: NextRequest): boolean {
+  const authHeader = request.headers.get('authorization')
+  return !!authHeader && !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
+}
 
 async function handleGenerate(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -32,6 +38,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!checkCronSecret(request)) {
+    const { authenticated } = await requireAuth()
+    if (!authenticated) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
   return handleGenerate(request)
 }
 

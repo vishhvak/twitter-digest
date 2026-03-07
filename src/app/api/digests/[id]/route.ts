@@ -25,6 +25,12 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { requireAuth } = await import('@/lib/supabase/auth')
+  const { authenticated } = await requireAuth()
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { id } = await params
   const supabase = createAdminClient()
 

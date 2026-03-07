@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createLogger } from '@/lib/logger'
 import { extractThread, extractArticle, isArticleUrl } from '@/lib/threads/extract'
+import { requireAuth } from '@/lib/supabase/auth'
 
 const log = createLogger('resync')
 
@@ -9,6 +10,11 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { authenticated } = await requireAuth()
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { id } = await params
   const start = Date.now()
   log.info(`Resync requested: bookmark=${id}`)

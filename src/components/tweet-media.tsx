@@ -6,6 +6,37 @@ interface TweetMediaProps {
   media: MediaItem[]
 }
 
+function isVideo(item: MediaItem): boolean {
+  return item.type === "video" || item.type === "animated_gif"
+}
+
+function MediaElement({ item, className }: { item: MediaItem; className?: string }) {
+  if (isVideo(item)) {
+    const isGif = item.type === "animated_gif"
+    return (
+      <video
+        src={item.url}
+        className={className}
+        controls={!isGif}
+        autoPlay={isGif}
+        loop={isGif}
+        muted={isGif}
+        playsInline
+        preload="metadata"
+      />
+    )
+  }
+
+  return (
+    <img
+      src={item.url}
+      alt={item.alt_text || ""}
+      className={className}
+      loading="lazy"
+    />
+  )
+}
+
 export function TweetMedia({ media }: TweetMediaProps) {
   const items = media.filter((m) => m.url)
   if (items.length === 0) return null
@@ -13,12 +44,9 @@ export function TweetMedia({ media }: TweetMediaProps) {
   if (items.length === 1) {
     return (
       <div className="overflow-hidden rounded-xl">
-        <img
-          src={items[0].url}
-          alt={items[0].alt_text || ""}
+        <MediaElement
+          item={items[0]}
           className="w-full object-cover"
-          style={{ maxHeight: "300px" }}
-          loading="lazy"
         />
       </div>
     )
@@ -28,12 +56,10 @@ export function TweetMedia({ media }: TweetMediaProps) {
     return (
       <div className="grid grid-cols-2 gap-0.5 overflow-hidden rounded-xl">
         {items.map((item, i) => (
-          <img
+          <MediaElement
             key={i}
-            src={item.url}
-            alt={item.alt_text || ""}
+            item={item}
             className="h-40 w-full object-cover"
-            loading="lazy"
           />
         ))}
       </div>
@@ -48,11 +74,9 @@ export function TweetMedia({ media }: TweetMediaProps) {
     <div className="grid grid-cols-2 grid-rows-2 gap-0.5 overflow-hidden rounded-xl">
       {visible.map((item, i) => (
         <div key={i} className="relative">
-          <img
-            src={item.url}
-            alt={item.alt_text || ""}
+          <MediaElement
+            item={item}
             className="h-28 w-full object-cover"
-            loading="lazy"
           />
           {i === 3 && remaining > 0 && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50">

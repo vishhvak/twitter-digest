@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, ExternalLink, RefreshCw, ChevronDown } from "lucide-react"
 import { Digest } from "@/lib/supabase/types"
 import { ConfirmModal } from "@/components/confirm-modal"
+import { useAuth } from "@/hooks/use-auth"
 
 function stripLeadingAt(handle: string) {
   return handle.replace(/^@+/, "")
@@ -13,6 +14,7 @@ function stripLeadingAt(handle: string) {
 export default function DigestDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { isAdmin } = useAuth()
   const [digest, setDigest] = useState<Digest | null>(null)
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
@@ -83,20 +85,22 @@ export default function DigestDetailPage() {
           <ArrowLeft size={14} />
           Back
         </button>
-        <button
-          onClick={() => setShowRegenModal(true)}
-          disabled={regenerating}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors"
-          style={{
-            color: "var(--color-text-secondary)",
-            opacity: regenerating ? 0.5 : 1,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          <RefreshCw size={13} className={regenerating ? "animate-spin" : ""} />
-          {regenerating ? "Regenerating..." : "Regenerate"}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowRegenModal(true)}
+            disabled={regenerating}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors"
+            style={{
+              color: "var(--color-text-secondary)",
+              opacity: regenerating ? 0.5 : 1,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-bg-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <RefreshCw size={13} className={regenerating ? "animate-spin" : ""} />
+            {regenerating ? "Regenerating..." : "Regenerate"}
+          </button>
+        )}
       </div>
 
       {/* Header */}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createLogger } from '@/lib/logger'
+import { requireAuth } from '@/lib/supabase/auth'
 
 const log = createLogger('summarize')
 
@@ -12,6 +13,7 @@ export async function POST(
   const { id } = await params
   const supabase = createAdminClient()
 
+  // Allow cached summaries without auth, but require auth for generation
   const { data: bookmark, error } = await supabase
     .from('bookmarks')
     .select('*, thread_tweets:thread_tweets(*)')
@@ -23,10 +25,16 @@ export async function POST(
     return NextResponse.json({ error: 'Bookmark not found' }, { status: 404 })
   }
 
-  // Return cached summary if available
+  // Return cached summary if available (no auth needed)
   if (bookmark.ai_summary) {
     log.info(`Returning cached summary for ${id}`)
     return NextResponse.json({ summary: bookmark.ai_summary })
+  }
+
+  // Generating new summary costs API credits — require auth
+  const { authenticated } = await requireAuth()
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // Build content for summarization

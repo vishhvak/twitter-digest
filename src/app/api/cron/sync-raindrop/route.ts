@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { syncRaindrops, SyncMode } from '@/lib/raindrop/sync'
 import { createLogger } from '@/lib/logger'
+import { requireAuth } from '@/lib/supabase/auth'
 
 const log = createLogger('sync-api')
 
 const VALID_MODES: SyncMode[] = ['incremental', 'full', 'backfill-older']
+
+function checkCronSecret(request: NextRequest): boolean {
+  const authHeader = request.headers.get('authorization')
+  return !!authHeader && !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`
+}
 
 async function handleSync(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -35,6 +41,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Manual trigger from UI requires Supabase Auth (or CRON_SECRET fallback)
+  if (!checkCronSecret(request)) {
+    const { authenticated } = await requireAuth()
+    if (!authenticated) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
   return handleSync(request)
 }
 
